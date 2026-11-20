@@ -20,8 +20,8 @@ export const session = (): User | null => {
 }
 export const logout = () => { try { localStorage.removeItem('odoo20-session') } catch { /* ignore */ } }
 
-export function Auth({ onIn }: { onIn: (u: User, fresh: boolean) => void }) {
-  const [mode, setMode] = useState<'in' | 'up'>('in')
+export function Auth({ onIn, mode0 = 'in' }: { onIn: (u: User, fresh: boolean) => void; mode0?: 'in' | 'up' }) {
+  const [mode, setMode] = useState<'in' | 'up'>(mode0)
   const [n, setN] = useState(''); const [p, setP] = useState(''); const [p2, setP2] = useState('')
   const [job, setJob] = useState(JOBS[0]); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
 
@@ -50,7 +50,7 @@ export function Auth({ onIn }: { onIn: (u: User, fresh: boolean) => void }) {
     <div className="auth">
       <form className="auth-card" onSubmit={submit} noValidate>
         <div className="auth-logo">🗺️</div>
-        <h1>أعظم رحلة لتخرج كونسلتنت أودو</h1>
+        <h1>Odoo 20 Consultant</h1>
         <div className="auth-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={mode === 'in'} onClick={() => { setMode('in'); setErr('') }}>تسجيل دخول</button>
           <button type="button" role="tab" aria-selected={mode === 'up'} onClick={() => { setMode('up'); setErr('') }}>حساب جديد</button>
@@ -109,8 +109,8 @@ export function CloudSignup({ onDone }: { onDone: (u: User) => void }) {
   )
 }
 
-export function SbAuth({ onIn }: { onIn: (u: User, fresh: boolean) => void }) {
-  const [mode, setMode] = useState<'in' | 'up'>('in')
+export function SbAuth({ onIn, mode0 = 'in' }: { onIn: (u: User, fresh: boolean) => void; mode0?: 'in' | 'up' }) {
+  const [mode, setMode] = useState<'in' | 'up'>(mode0)
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [pw, setPw] = useState('')
   const [job, setJob] = useState(JOBS[0]); const [err, setErr] = useState(''); const [info, setInfo] = useState(''); const [busy, setBusy] = useState(false)
   const submit = async (e: React.FormEvent) => {
@@ -138,7 +138,7 @@ export function SbAuth({ onIn }: { onIn: (u: User, fresh: boolean) => void }) {
     <div className="auth">
       <form className="auth-card" onSubmit={submit} noValidate>
         <div className="auth-logo">🗺️</div>
-        <h1>أعظم رحلة لتخرج كونسلتنت أودو</h1>
+        <h1>Odoo 20 Consultant</h1>
         <div className="auth-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={mode === 'in'} onClick={() => { setMode('in'); setErr('') }}>تسجيل دخول</button>
           <button type="button" role="tab" aria-selected={mode === 'up'} onClick={() => { setMode('up'); setErr('') }}>حساب جديد</button>

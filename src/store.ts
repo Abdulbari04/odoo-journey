@@ -124,3 +124,69 @@ export async function adminSb(email: string, password: string): Promise<Row[]> {
   return r.data.map((x: any) => ({ id: x.user_id, email: x.email, data: x.data })) // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 export async function adminSbOut() { try { await ensureSb(); await sb.auth.signOut() } catch { /* ignore */ } }
+
+// ---- المجتمع: تعليقات الموديولات ----
+export type Cmt = { id: string; uid: string; k: string; name: string; text: string; t: number; mine: boolean }
+const LOCAL_C = 'odoo20-comments'
+const rdLocal = (): Cmt[] => { try { return JSON.parse(localStorage.getItem(LOCAL_C) || '[]') } catch { return [] } }
+export async function cmtList(): Promise<Cmt[]> {
+  let out: Cmt[] = []
+  try {
+    if (backend === 'claude' && cloud && dbh) {
+      const snap = await dbh.collection('comments').get()
+      for (const d of snap.docs) for (const it of (d.data().items || [])) out.push({ ...it, uid: d.id, mine: d.id === cloud.uid })
+    } else if (backend === 'sb' && sb && cloud) {
+      const r = await sb.from('comments').select('id,user_id,name,module,text,created_at').order('created_at', { ascending: false }).limit(300)
+      if (r.error) throw r.error
+      out = r.data.map((x: any) => ({ id: x.id, uid: x.user_id, k: x.module, name: x.name, text: x.text, t: Date.parse(x.created_at), mine: x.user_id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
+    } else out = rdLocal().map(c => ({ ...c, uid: 'me', mine: true }))
+  } catch { /* لو التحميل فشل نعرض قايمة فاضية */ }
+  return out.sort((a, b) => b.t - a.t)
+}
+export async function cmtAdd(k: string, name: string, text: string): Promise<void> {
+  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), k, name, text: text.slice(0, 400), t: Date.now() }
+  if (backend === 'claude' && cloud && dbh) {
+    const ref = dbh.doc('comments/' + cloud.uid); const snap = await ref.get()
+    const items = ((snap.exists ? snap.data().items : []) || []) as object[]
+    await ref.set({ items: [...items, c].slice(-100) })
+  } else if (backend === 'sb' && sb && cloud) {
+    const r = await sb.from('comments').insert({ user_id: cloud.uid, name, module: k, text: c.text }); if (r.error) throw r.error
+  } else localStorage.setItem(LOCAL_C, JSON.stringify([...rdLocal(), c].slice(-200)))
+}
+export async function cmtDel(id: string): Promise<void> {
+  if (backend === 'claude' && cloud && dbh) {
+    const ref = dbh.doc('comments/' + cloud.uid); const snap = await ref.get()
+    await ref.set({ items: ((snap.exists ? snap.data().items : []) as { id: string }[]).filter(x => x.id !== id) })
+  } else if (backend === 'sb' && sb && cloud) { const r = await sb.from('comments').delete().eq('id', id); if (r.error) throw r.error }
+  else localStorage.setItem(LOCAL_C, JSON.stringify(rdLocal().filter(x => x.id !== id)))
+}
+export const cmtShared = () => backend !== 'local'
+
+// ---- الملفات الشخصية والمتصدرين ----
+export type Person = { id: string; name: string; job: string; bio: string; avatar: string; pts: number; mods: number; lvls: number; t: number; me: boolean }
+const LOCAL_P = 'odoo20-person'
+export async function pushPerson(p: Omit<Person, 'id' | 't' | 'me'>): Promise<void> {
+  const t = Date.now()
+  try {
+    if (backend === 'claude' && cloud && dbh) await dbh.doc('people/' + cloud.uid).set({ ...p, t })
+    else if (backend === 'sb' && sb && cloud) {
+      const r = await sb.from('people').upsert({ user_id: cloud.uid, name: p.name, job: p.job, bio: p.bio, avatar: p.avatar, pts: p.pts, mods: p.mods, lvls: p.lvls, updated_at: new Date(t).toISOString() })
+      if (r.error) throw r.error
+    } else localStorage.setItem(LOCAL_P, JSON.stringify({ ...p, t }))
+  } catch { /* مش لازم يوقّف الموقع */ }
+}
+export async function listPeople(): Promise<Person[]> {
+  try {
+    if (backend === 'claude' && cloud && dbh) {
+      const snap = await dbh.collection('people').get()
+      return snap.docs.map((d: any) => ({ id: d.id, name: '', job: '', bio: '', avatar: '', pts: 0, mods: 0, lvls: 0, t: 0, ...d.data(), me: d.id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
+    }
+    if (backend === 'sb' && sb && cloud) {
+      const r = await sb.from('people').select('user_id,name,job,bio,avatar,pts,mods,lvls,updated_at').order('pts', { ascending: false }).limit(200)
+      if (r.error) throw r.error
+      return r.data.map((x: any) => ({ id: x.user_id, name: x.name, job: x.job || '', bio: x.bio || '', avatar: x.avatar || '', pts: x.pts, mods: x.mods, lvls: x.lvls, t: Date.parse(x.updated_at), me: x.user_id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
+    }
+    const m = JSON.parse(localStorage.getItem(LOCAL_P) || 'null')
+    return m ? [{ id: 'me', ...m, me: true }] : []
+  } catch { return [] }
+}

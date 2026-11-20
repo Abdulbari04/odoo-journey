@@ -41,7 +41,7 @@ export function TipToast({ k, name, dock }: { k: string | null; name: (k: string
   if (!t) return null
   return (
     <aside className={'tip' + (dock ? ' dock' : '')} key={t.id} role="status" aria-live="polite">
-      <div className="tip-h"><b>💡 ملاحظة من أودو · {name(t.k)}</b><button onClick={() => setT(null)} aria-label="اقفل الملاحظة">×</button></div>
+      <div className="tip-h"><b><em>ملاحظة</em> · {name(t.k)}</b><button onClick={() => setT(null)} aria-label="اقفل الملاحظة">×</button></div>
       <p>{t.s}</p>
       <i className="tip-bar" style={{ animationDuration: SHOW + 'ms' }} />
     </aside>

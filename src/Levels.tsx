@@ -15,6 +15,20 @@ export function LevelHead({ lv, state }: { lv: Level; state: 'open' | 'locked' |
   )
 }
 
+export function Stepper({ li, cur, done, passed, onPick }: { li: number; cur: string; done: Record<string, boolean>; passed: Passed; onPick: (id: string) => void }) {
+  const lv = LEVELS[li], open = unlocked(li, passed)
+  const items = [...lv.ch.map(k => ({ id: k, t: N[k], ok: !!done[k] })), { id: 'exam', t: 'الاختبار', ok: !!passed[lv.id] }]
+  const at = items.findIndex(x => x.id === cur)
+  return (
+    <nav className="stp" aria-label={'تقدّم المستوى ' + lv.id}>
+      <div className="stp-h"><b>المستوى {lv.id}: {lv.t}</b><span>{open ? `الخطوة ${at + 1} من ${items.length}` : '🔒 مقفول'}</span></div>
+      <div className="stp-bar" aria-hidden="true"><i style={{ width: ((at + 1) / items.length) * 100 + '%' }} /></div>
+      <ol className="stp-l">
+        {items.map((x, j) => <li key={x.id}><button className={(x.id === cur ? 'on ' : '') + (x.ok ? 'ok' : '')} aria-current={x.id === cur ? 'step' : undefined} onClick={() => onPick(x.id)}><i>{x.ok ? '✓' : j + 1}</i><span>{x.t}</span></button></li>)}
+      </ol>
+    </nav>)
+}
+
 export function LockedCard({ k, lv }: { k: string; lv: Level }) {
   const prev = LEVELS[LEVELS.indexOf(lv) - 1]
   return (
@@ -28,7 +42,7 @@ export function LockedCard({ k, lv }: { k: string; lv: Level }) {
 
 const shuffle = <T,>(a: T[]) => { const r = [...a]; for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]] } return r }
 
-export function LevelExam({ lv, passed, onPass, onNext }: { lv: Level; passed: boolean; onPass: () => void; onNext: (() => void) | null }) {
+export function LevelExam({ lv, passed, onPass, onNext, onBack }: { lv: Level; passed: boolean; onPass: () => void; onNext: (() => void) | null; onBack?: () => void }) {
   const [run, setRun] = useState(0) // 0 مقفول، غير كده رقم المحاولة
   const [ans, setAns] = useState<Record<number, string>>({})
   const [res, setRes] = useState<number | null>(null)
@@ -62,14 +76,18 @@ export function LevelExam({ lv, passed, onPass, onNext }: { lv: Level; passed: b
         </ol>
         {res === null
           ? <button className="cta" disabled={Object.keys(ans).length < qs.length} onClick={submit}>سلّم الإجابات</button>
-          : <div className={'res ' + (res >= PASS ? 'p' : 'f')} role="status">
-              <b>{res} من {qs.length}</b>
-              <span>{res >= PASS ? `مبروك! المستوى ${lv.id} اتحسب مكتمل.${onNext ? ' واللي بعده اتفتح لك.' : ' خلّصت الرحلة كلها!'}` : `محتاج ${PASS} على الأقل. راجع الفصول وجرّب تاني.`}</span>
-              <div className="resb">
-                {res >= PASS && onNext && <button className="cta" onClick={onNext}>للمستوى التالي ↓</button>}
-                {res < PASS && <button className="cta" onClick={start}>جرّب تاني</button>}
+          : res >= PASS
+            ? <div className="win" role="status">
+                <div className="win-i" aria-hidden="true">🎉</div>
+                <h4>نجحت! مبروك عليك</h4>
+                <p>جاوبت {res} من {qs.length} صح، وخلّصت المستوى {lv.id} «{lv.t}».{onNext ? ' المستوى التالي اتفتح لك.' : ' وكده خلّصت الرحلة كلها، مبروك التخرج!'}</p>
+                {onNext && <button className="cta big" onClick={onNext}>الذهاب للمستوى التالي ←</button>}
               </div>
-            </div>}
+            : <div className="res f" role="status">
+                <b>{res} من {qs.length}</b>
+                <span>محتاج {PASS} على الأقل. راجع الموديولات وجرّب تاني.</span>
+                <div className="resb"><button className="cta" onClick={start}>جرّب تاني</button>{onBack && <button className="tb" onClick={onBack}>راجع الموديولات</button>}</div>
+              </div>}
       </>}
     </section>
   )

@@ -7,7 +7,7 @@ import { unlocked, type Passed } from './Levels'
 
 const subs = (k: string, data: Data): [string, string][] => {
   if (!data.CORE[k]) return [['guide', 'الدليل التفصيلي'], ['note', 'ملاحظاتي']]
-  const r: [string, string][] = [['draw', 'الرسمة'], ['terms', 'المصطلحات'], ['steps', 'خطوة بخطوة']]
+  const r: [string, string][] = [['terms', 'المصطلحات'], ['steps', 'خطوة بخطوة']]
   if (GUIDES[k]) r.push(['guide', 'الدليل التفصيلي'])
   r.push(['acc', 'الأثر المحاسبي'])
   if (MODS.includes(k)) r.push(['links', 'مربوط بـ'])

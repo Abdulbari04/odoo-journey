@@ -1,3 +1,4 @@
+import { ModuleComments } from './Community'
 import * as store from './store'
 import { Fragment, useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
@@ -126,61 +127,106 @@ function Vs({ k, list }: { k: string; list: Chg[] }) {
     </div>)
 }
 
-export function GuideChapter({ k, i, done, onDone, go, collapsed, onToggle }: { k: string; i: number; done: boolean; onDone: () => void; go: (k: string) => void; collapsed: boolean; onToggle: () => void }) {
-  const g = GUIDES[k], nx = ORDER[i + 1]
+export const tabFor = (id: string) => /-(draw|terms|steps)$/.test(id) ? 'learn' : /-guide$/.test(id) ? 'guide' : /-(acc|links)$/.test(id) ? 'acc' : /-(vs|up)$/.test(id) ? 'chg' : 'more'
+export type Sub = { k: string; id: string; n: number } | null
+
+function Pager({ k, done, onFinish, onToggle, go }: { k: string; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void }) {
+  const i = ORDER.indexOf(k), pv = ORDER[i - 1], lv = LEVELS[levelIdx(k)], last = lv.ch[lv.ch.length - 1] === k, nx = ORDER[i + 1]
+  return (
+    <div className="fin">
+      <button className="cta big" onClick={onFinish}>{last ? `اختبار المستوى ${lv.id}` : `التالي: ${N[nx]}`} <b>←</b></button>
+      <div className="fin2">
+        <button disabled={!pv || levelIdx(pv) !== levelIdx(k)} onClick={() => pv && go(pv)}>→ السابق{pv && levelIdx(pv) === levelIdx(k) ? `: ${N[pv]}` : ''}</button>
+        <button aria-pressed={done} onClick={onToggle}>{done ? '✓ مكتمل (إلغاء)' : 'علّم كمكتمل بس'}</button>
+      </div>
+    </div>)
+}
+
+export function GuideChapter({ k, i, done, onFinish, onToggle, go, sub, who }: { who: string; k: string; i: number; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void; sub: Sub }) {
+  const g = GUIDES[k]
+  useEffect(() => { if (sub && sub.k === k) setTimeout(() => document.getElementById(sub.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120) }, [sub, k])
   return (
     <section className="ch" id={'ch-' + k} data-k={k} style={cv(k)}>
-      <div className="kick">الفصل {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id}: {LEVELS[levelIdx(k)].t} · صعوبة الموديول: {g.level}</div>
-      <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{g.title || N[k]}</Ar></h2></div><div className="tools">
-        <button className="ib" aria-pressed={done} aria-label={done ? 'الفصل مكتمل' : 'علّم الفصل كمكتمل'} title={done ? 'مكتمل' : 'علّم كمكتمل'} onClick={onDone}>✓</button>
-        {nx && <button className="ib" aria-label={'الفصل اللي بعده: ' + N[nx]} title={'التالي: ' + N[nx]} onClick={() => go(nx)}>↓</button>}
-        <button className="fold" aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? 'وسّع ▾' : 'ضيّق ▴'}</button>
-      </div></div>
+      <div className="kick">الموديول {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id} · صعوبة الموديول: {g.level}</div>
+      <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{g.title || N[k]}</Ar></h2></div></div>
       {g.intro && <p className="intro"><Ar>{g.intro}</Ar></p>}
-      {!collapsed && <>
-        <h3 id={sid(k, 'guide')}>الدليل التفصيلي</h3>
-        <GuideView g={g} />
-        <h3 id={sid(k, 'note')}>ملاحظاتي</h3>
-        <Note k={k} />
-      </>}
+      <h3 id={sid(k, 'guide')}>الدليل التفصيلي</h3>
+      <GuideView g={g} />
+      <h3 id={sid(k, 'note')}>ملاحظاتي</h3>
+      <Note k={k} />
+      <ModuleComments k={k} name={who} />
+      <Pager k={k} done={done} onFinish={onFinish} onToggle={onToggle} go={go} />
     </section>)
 }
 
-export function ChapterView({ k, i, data, done, onDone, go, collapsed, onToggle }: { k: string; i: number; data: Data; done: boolean; onDone: () => void; go: (k: string) => void; collapsed: boolean; onToggle: () => void }) {
-  const c = data.CORE[k], nx = ORDER[i + 1]
+const numOf = (t: string) => Number(t.replace(/[^\d.]/g, ''))
+const fmt = (n: number) => n.toLocaleString('en-US')
+// يفكّ جانب القيد (مثلًا «المبيعات + ضريبة 1,120») لسطور فيها اسم الحساب والمبلغ
+function jlines(side: string, total: string): [string, string][] {
+  const T = numOf(total)
+  const parts = side.split(/\s*\+\s*/).map(p => { const m = p.match(/^(.*?)\s*(\d[\d,]*(?:\.\d+)?)$/); return m ? { n: m[1].trim(), a: numOf(m[2]) } : { n: p.trim(), a: NaN } })
+  const miss = parts.filter(p => isNaN(p.a)), known = parts.reduce((x, p) => x + (isNaN(p.a) ? 0 : p.a), 0)
+  if (!isNaN(T) && miss.length === 1) miss[0].a = T - known
+  return parts.map(p => [p.n || side, isNaN(p.a) ? total : fmt(p.a)])
+}
+function Je({ r }: { r: string[] }) {
+  return (
+    <blockquote className="je">
+      <div className="jt"><Ar>{r[0]}</Ar></div>
+      {jlines(r[1], r[3]).map(([n, a], i) => <div className="jl d" key={'d' + i}><span><em>مدين</em><Ar>{n}</Ar></span><b dir="ltr">{a}</b></div>)}
+      {jlines(r[2], r[3]).map(([n, a], i) => <div className="jl c" key={'c' + i}><span><em>دائن</em><Ar>{n}</Ar></span><b dir="ltr">{a}</b></div>)}
+    </blockquote>)
+}
+
+function Sec({ k, id, n, t, children }: { k: string; id: string; n: number; t: string; children: ReactNode }) {
+  return <section className="csec" id={`sec-${k}-${id}`}><h2 className="sh"><i>{n}</i>{t}</h2>{children}</section>
+}
+
+export function ChapterView({ k, i, data, done, onFinish, onToggle, go, sub, who }: { who: string; k: string; i: number; data: Data; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void; sub: Sub }) {
+  const c = data.CORE[k]
   const links = MODS.includes(k) ? Object.values(E).filter(e => e.a === k || e.b === k) : []
+  const tabs = [['learn', 'الفهم'], ...(GUIDES[k] ? [['guide', 'الدليل التفصيلي']] : []), ['acc', 'المحاسبة والربط'], ...(CHK[k] || c.up ? [['chg', 'Odoo 20 مقابل 19']] : []), ['more', 'اختبر نفسك']] as [string, string][]
+  const nn = (id: string) => tabs.findIndex(t => t[0] === id) + 1
+  useEffect(() => {
+    if (!sub || sub.k !== k) return
+    const t = setTimeout(() => document.getElementById(sub.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); return () => clearTimeout(t)
+  }, [sub, k])
   return (
     <section className="ch" id={'ch-' + k} data-k={k} style={cv(k)}>
-      <div className="kick">الفصل {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id}: {LEVELS[levelIdx(k)].t}{GUIDES[k] ? ` · صعوبة الموديول: ${GUIDES[k].level}` : ''}</div>
-      <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{c.t}</Ar></h2><div className="sub2">{c.en}</div></div><div className="tools">
-        <button className="ib" aria-pressed={done} aria-label={done ? 'الفصل مكتمل' : 'علّم الفصل كمكتمل'} title={done ? 'مكتمل' : 'علّم كمكتمل'} onClick={onDone}>✓</button>
-        {nx ? <button className="ib" aria-label={'الفصل اللي بعده: ' + N[nx]} title={'التالي: ' + N[nx]} onClick={() => go(nx)}>↓</button> : <button className="ib" aria-label="رجوع للبداية" title="للبداية" onClick={() => scrollTo({ top: 0, behavior: 'smooth' })}>↑</button>}
-        <button className="fold" aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? 'وسّع ▾' : 'ضيّق ▴'}</button>
-      </div></div>
+      <div className="kick">الموديول {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id}{GUIDES[k] ? ` · صعوبة الموديول: ${GUIDES[k].level}` : ''}</div>
+      <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{c.t}</Ar></h2><div className="sub2">{c.en}</div></div></div>
       <p className="intro"><Ar>{c.intro}</Ar></p>
-      {!collapsed && <>
-      <p className="ana"><Ar>{c.analogy}</Ar></p>
-      <h3 id={sid(k, 'draw')}>الرسمة</h3>
-      <Storyboard k={k} />
-      <div className="bridge"><span>جاي من: <Ar>{c.from}</Ar></span><span>رايح لـ: <Ar>{c.to}</Ar></span></div>
-      <h3 id={sid(k, 'terms')}>المصطلحات</h3>
-      <div className="terms">{c.terms.map(t => <div className="term" key={t[0]}><div className="t">{t[0]}</div><div className="d"><Ar>{t[1]}</Ar></div></div>)}</div>
-      <h3 id={sid(k, 'steps')}>خطوة بخطوة</h3>
-      <ol className="steps">{c.steps.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol>
-      <p className="ex"><Ar>{c.ex}</Ar></p>
-      {GUIDES[k] && <><h3 id={sid(k, 'guide')}>الدليل التفصيلي: إزاي تشتغل على الموديول</h3><GuideView g={GUIDES[k]} /></>}
-      <h3 id={sid(k, 'acc')}>الأثر المحاسبي</h3>
-      {c.acc ? <><div className="ents">{c.acc.map((r, j) => <div className="ent" key={j}><b><Ar>{r[0]}</Ar></b><div className="r"><span>مدين</span><span><Ar>{r[1]}</Ar></span></div><div className="r"><span>دائن</span><span><Ar>{r[2]}</Ar></span></div><span className="amt"><Ar>{r[3]}</Ar></span></div>)}</div><p className="sm"><Ar>{c.accNote}</Ar></p></> : <p className="nonote"><Ar>{c.accNote}</Ar></p>}
-      {links.length > 0 && <><h3 id={sid(k, 'links')}>مربوط بـ</h3><div className="links">{links.map(e => { const o = e.a === k ? e.b : e.a; return <button key={e.a + e.b} className="lk" style={{ ['--c2' as string]: `var(${COL[o]})` }} onClick={() => go(o)}><b><i />{e.t} ← {N[o]}</b><span><Ar>{e.d}</Ar></span></button> })}</div></>}
-      {CHK[k] && <Vs k={k} list={data.CHG[CHK[k]]} />}
-      {c.up && <><h3 id={sid(k, 'up')}>قايمة اختبار الترقية من 19 لـ 20</h3><ol className="steps">{c.up.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol></>}
-      <h3 id={sid(k, 'quiz')}>اختبر نفسك</h3>
-      <div className="qz">{c.quiz.map((q, j) => <details key={j}><summary><Ar>{q[0]}</Ar></summary><p><Ar>{q[1]}</Ar></p></details>)}</div>
-      <h3 id={sid(k, 'note')}>ملاحظاتي</h3>
-      <Note k={k} />
-      <h3 id={sid(k, 'src')}>المصادر</h3>
-      <ul className="srcs">{c.src.map(s => <li key={s[1]}><a href={s[1]} target="_blank" rel="noopener noreferrer">{s[0]}</a></li>)}</ul>
-      </>}
+      <div className="cpanel">
+      <Sec k={k} id="learn" n={nn('learn')} t="الفهم">
+        <p className="ana"><Ar>{c.analogy}</Ar></p>
+        <div id={sid(k, 'draw')}><Storyboard k={k} /></div>
+        <h3 id={sid(k, 'terms')}>المصطلحات</h3>
+        <div className="terms">{c.terms.map(t => <div className="term" key={t[0]}><div className="t">{t[0]}</div><div className="d"><Ar>{t[1]}</Ar></div></div>)}</div>
+        <h3 id={sid(k, 'steps')}>خطوة بخطوة</h3>
+        <ol className="steps">{c.steps.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol>
+        <p className="ex"><Ar>{c.ex}</Ar></p>
+      </Sec>
+      {GUIDES[k] && <Sec k={k} id="guide" n={nn('guide')} t="الدليل التفصيلي"><h3 id={sid(k, 'guide')}>إزاي تشتغل على الموديول</h3><GuideView g={GUIDES[k]} /></Sec>}
+      <Sec k={k} id="acc" n={nn('acc')} t="المحاسبة والربط">
+        <h3 id={sid(k, 'acc')}>الأثر المحاسبي</h3>
+        {c.acc ? <><div className="ents">{c.acc.map((r, j) => <Je key={j} r={r} />)}</div><p className="sm"><Ar>{c.accNote}</Ar></p></> : <p className="sm"><Ar>{c.accNote}</Ar></p>}
+        {links.length > 0 && <><h3 id={sid(k, 'links')}>مربوط بـ</h3><div className="links">{links.map(e => { const o = e.a === k ? e.b : e.a; return <div key={e.a + e.b} className="lk" style={{ ['--c2' as string]: `var(${COL[o]})` }}><b><i />{e.t} ← {N[o]}</b><span><Ar>{e.d}</Ar></span><button className="lkgo" onClick={() => go(o)}>الذهاب إلى {N[o]}</button></div> })}</div></>}
+      </Sec>
+      {(CHK[k] || c.up) && <Sec k={k} id="chg" n={nn('chg')} t="Odoo 20 مقابل 19">
+        {CHK[k] && <Vs k={k} list={data.CHG[CHK[k]]} />}
+        {c.up && <><h3 id={sid(k, 'up')}>قايمة اختبار الترقية من 19 لـ 20</h3><ol className="steps">{c.up.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol></>}
+      </Sec>}
+      <Sec k={k} id="more" n={nn('more')} t="اختبر نفسك">
+        <h3 id={sid(k, 'quiz')}>اختبر نفسك</h3>
+        <div className="qz">{c.quiz.map((q, j) => <details key={j}><summary><Ar>{q[0]}</Ar></summary><p><Ar>{q[1]}</Ar></p></details>)}</div>
+        <h3 id={sid(k, 'note')}>ملاحظاتي</h3>
+        <Note k={k} />
+        <h3 id={sid(k, 'src')}>المصادر</h3>
+        <ul className="srcs">{c.src.map(s => <li key={s[1]}><a href={s[1]} target="_blank" rel="noopener noreferrer">{s[0]}</a></li>)}</ul>
+      </Sec>
+      </div>
+      <ModuleComments k={k} name={who} />
+      <Pager k={k} done={done} onFinish={onFinish} onToggle={onToggle} go={go} />
     </section>)
 }
 void Fragment
