@@ -1,12 +1,13 @@
 import { LEVELS } from './levels'
+import { fmtN } from './points'
 import { N, COL, ORDER } from './Chapter'
 import { unlocked, type Passed } from './Levels'
 import { ILL } from './Stations'
 
 // الصفحة الرئيسية: كل الموديولات في كروت، وجنب كل واحد حالته (مكتمل / مفتوح / مغلق + اختبار دخول)
-export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, onTheme, theme, onOut }: {
+export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, pts, onTheme, theme, onOut }: {
   name: string; passed: Passed; done: Record<string, boolean>; started: boolean; onStart: () => void; onModule: (k: string) => void
-  onSearch: () => void; onComm: () => void; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void
+  onSearch: () => void; onComm: () => void; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void
 }) {
   const doneN = ORDER.filter(k => done[k]).length, passN = Object.values(passed).filter(Boolean).length
   return (
@@ -29,7 +30,7 @@ export function Home({ name, passed, done, started, onStart, onModule, onSearch,
             <button className="ent-open" onClick={onStart}>{started ? 'كمّل الرحلة' : 'بداية الرحلة'} <b>←</b></button>
             <span className="hm-stat"><b>{doneN}</b>/{ORDER.length} موديول مكتمل</span>
             <span className="hm-stat"><b>{passN}</b>/{LEVELS.length} مستويات اجتزتها</span>
-            <span className="hm-stat"><b>{doneN * 10 + passN * 50}</b> نقطة</span>
+            <span className="hm-stat"><b>{fmtN(pts)}</b> نقطة</span>
           </div>
         </header>
         <section className="ent-grid hm-grid" id="ent-grid" aria-label="كل الموديولات">

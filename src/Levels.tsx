@@ -1,3 +1,4 @@
+import { addPen } from './points'
 import { useMemo, useState } from 'react'
 import { LEVELS, PASS, type Level } from './levels'
 import { N, COL } from './Chapter'
@@ -49,7 +50,7 @@ export function LevelExam({ lv, passed, onPass, onNext, onBack }: { lv: Level; p
   const qs = useMemo(() => lv.exam.map(q => ({ ...q, opts: shuffle([q.ok, ...q.bad]) })), [lv, run]) // eslint-disable-line react-hooks/exhaustive-deps
   const submit = () => {
     const score = qs.filter((q, i) => ans[i] === q.ok).length
-    setRes(score); track.exam(score >= PASS); if (score >= PASS && !passed) onPass()
+    setRes(score); addPen(lv.id, qs.length - score); track.exam(score >= PASS); if (score >= PASS && !passed) onPass()
   }
   const start = () => { setRun(r => r + 1); setAns({}); setRes(null) }
   return (
@@ -133,14 +134,14 @@ export function SkipExam({ li, passed, onPassAll, compact }: { li: number; passe
   const [ans, setAns] = useState<Record<number, string>>({})
   const [res, setRes] = useState<number | null>(null)
   const qs = useMemo(() => {
-    const pool = prev.flatMap(l => l.exam)
+    const pool = prev.flatMap(l => l.exam.map(q => ({ ...q, lv: l.id })))
     const n = Math.min(pool.length, Math.min(10, Math.max(5, 2 * prev.length)))
     return shuffle(pool).slice(0, n).map(q => ({ ...q, opts: shuffle([q.ok, ...q.bad]) }))
   }, [run, li]) // eslint-disable-line react-hooks/exhaustive-deps
   if (prev.length === 0) return null
   const need = Math.ceil(qs.length * 0.8)
   const names = prev.map(l => `المستوى ${l.id}`).join(' و')
-  const submit = () => { const s = qs.filter((q, i) => ans[i] === q.ok).length; setRes(s); track.exam(s >= need); if (s >= need) onPassAll(prev.map(l => l.id)) }
+  const submit = () => { const s = qs.filter((q, i) => ans[i] === q.ok).length; qs.forEach((q, i) => { if (ans[i] !== q.ok) addPen(q.lv, 1) }); setRes(s); track.exam(s >= need); if (s >= need) onPassAll(prev.map(l => l.id)) }
   const start = () => { setRun(r => r + 1); setAns({}); setRes(null) }
   return (
     <section className={'exam skip' + (compact ? ' compact' : '')} aria-label={'اختبار فتح المستوى ' + LEVELS[li].id}>

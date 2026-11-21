@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import raw from './data.json'
 import type { Data } from './types'
 import { Bg } from './Bg'
@@ -11,7 +11,8 @@ import { Search } from './Search'
 import * as track from './track'
 import { Admin } from './Admin'
 import { Home } from './Home'
-import { CommunityPage, readProf, ptsOf } from './Community'
+import { CommunityPage, readProf } from './Community'
+import { calcPts, readPen, fmtN } from './points'
 import { Landing } from './Landing'
 import { SkipExam, Stepper, LevelExam, LockedCard, unlocked, type Passed } from './Levels'
 import * as store from './store'
@@ -49,11 +50,14 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const [started, setStarted] = useState(() => load('odoo20-started') === '1')
   const lockedK = (k: string) => !unlocked(levelIdx(k), passed)
   const [about, setAbout] = useState(false)
+  const [penV, setPenV] = useState(0)
+  useEffect(() => { const h = () => setPenV(v => v + 1); addEventListener('odoo20-pen', h); return () => removeEventListener('odoo20-pen', h) }, [])
+  const modsN = ORDER.filter(k => done[k]).length, lvlsN = Object.values(passed).filter(Boolean).length
+  const pts = useMemo(() => calcPts(modsN, passed, readPen()), [modsN, passed, penV]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const mods = ORDER.filter(k => done[k]).length, lvls = Object.values(passed).filter(Boolean).length
-    const t = setTimeout(() => { const p = readProf(user); void store.pushPerson({ ...p, pts: ptsOf(mods, lvls), mods, lvls }) }, 1200)
+    const t = setTimeout(() => { const p = readProf(user); void store.pushPerson({ ...p, pts, mods: modsN, lvls: lvlsN }) }, 1200)
     return () => clearTimeout(t)
-  }, [done, passed, user])
+  }, [pts, modsN, lvlsN, user])
   const [srch, setSrch] = useState(false)
   const [comm, setCommS] = useState(() => location.hash === '#community')
   const setComm = (v: boolean) => { setCommS(v); if (v) location.hash = 'community'; else if (location.hash === '#community') history.replaceState(null, '', location.pathname + location.search) }
@@ -95,7 +99,7 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
     {tip}
     <Search open={srch} onClose={() => setSrch(false)} data={data} passed={passed} onPassAll={passAll} go={go} goSub={goSub} />
     {about && <About onClose={() => setAbout(false)} />}
-    {comm && <CommunityPage base={user} mods={ORDER.filter(k => done[k]).length} lvls={Object.values(passed).filter(Boolean).length} current={course && step.t === 'ch' ? step.k : undefined} onClose={() => setComm(false)} />}
+    {comm && <CommunityPage base={user} pts={pts} mods={modsN} lvls={lvlsN} current={course && step.t === 'ch' ? step.k : undefined} onClose={() => setComm(false)} />}
     <div className="bar">
       {course && <button className="menub" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-label="قايمة الفصول" title="قايمة الفصول">☰</button>}
       <button className="brand brandb" onClick={() => { setView('intro'); scrollTo({ top: 0 }) }} title="صفحة البداية">خريطة أودو 20</button>
@@ -104,7 +108,7 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
       <button className="modeb srchb" onClick={() => setSrch(true)} aria-label="بحث" title="بحث">🔍</button>
       <button className="modeb" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀' : '☾'}</button>
     </div>
-    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
+    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
     {course && <div className="layout focus">
       <main className="chaps">
         <Stepper li={step.li} cur={step.t === 'ch' ? step.k : 'exam'} done={done} passed={passed} onPick={id => (id === 'exam' ? goExam(step.li) : go(id))} />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as store from './store'
 import { N, ORDER } from './Chapter'
 import { LEVELS } from './levels'
+import { MOD_PTS, LV_PTS, MAX_PTS, fmtN, rankOf } from './points'
 
 const ago = (t: number) => {
   const m = Math.max(0, Math.round((Date.now() - t) / 60000))
@@ -12,8 +13,7 @@ const ago = (t: number) => {
 }
 const label = (k: string) => (k === 'general' ? 'عام' : N[k] || k)
 
-export const ptsOf = (mods: number, lvls: number) => mods * 10 + lvls * 50
-export const rankOf = (p: number) => (p >= 450 ? 'مستشار' : p >= 300 ? 'محلّل' : p >= 150 ? 'ممارس' : p >= 50 ? 'متعلّم' : 'مبتدئ')
+export { rankOf }
 
 export function Av({ p, name, s = 28 }: { p?: store.Person; name: string; s?: number }) {
   return p?.avatar ? <img className="av" src={p.avatar} alt="" width={s} height={s} /> : <span className="av ph" style={{ width: s, height: s, fontSize: s * 0.42 }} aria-hidden="true">{(name || '?').trim().charAt(0).toUpperCase()}</span>
@@ -111,7 +111,7 @@ function ProfileTab({ base, pts, mods, lvls, onSaved }: { base: { name: string; 
           {p.avatar && <button type="button" className="pf-rm" onClick={() => up('avatar', '')}>إزالة</button>}
         </div>
       </div>
-      <div className="pf-stats"><span><b>{pts}</b> نقطة</span><span><b>{mods}</b> موديول</span><span><b>{lvls}</b> مستوى</span><span>{rankOf(pts)}</span></div>
+      <div className="pf-stats"><span><b>{fmtN(pts)}</b> نقطة</span><span><b>{mods}</b> موديول</span><span><b>{lvls}</b> مستوى</span><span>{rankOf(pts)}</span></div>
       <label>الاسم الظاهر<input value={p.name} maxLength={40} onChange={e => up('name', e.target.value)} /></label>
       <label>المسمّى أو الوظيفة<input value={p.job} maxLength={50} onChange={e => up('job', e.target.value)} placeholder="مثال: محاسب، مستشار تحت التدريب" /></label>
       <label>نبذة عنك<textarea value={p.bio} maxLength={160} rows={3} onChange={e => up('bio', e.target.value)} placeholder="سطر أو سطرين تعرّف بهما نفسك" /></label>
@@ -123,20 +123,34 @@ function ProfileTab({ base, pts, mods, lvls, onSaved }: { base: { name: string; 
 function Board({ people, me }: { people: store.Person[] | null; me: string }) {
   const [n, setN] = useState(10)
   const list = [...(people || [])].sort((a, b) => b.pts - a.pts || b.mods - a.mods || a.t - b.t)
+  const first = list[0], rest = list.slice(1)
+  const isMe = (x: store.Person) => x.me || x.id === me
   return (
     <div>
-      <div className="lb-rules"><b>النقاط:</b> 10 لكل موديول تُكمله، و50 لكل مستوى تجتاز اختباره (أقصى مجموع {ptsOf(23, LEVELS.length)}).</div>
+      <div className="lb-rules"><b>النقاط:</b> {fmtN(MOD_PTS)} لكل موديول تُكمله، و{fmtN(LV_PTS[0])}–{fmtN(LV_PTS[LV_PTS.length - 1])} لكل مستوى تجتاز اختباره (حسب المستوى). كل إجابة خاطئة في الاختبارات تخصم قيمة سؤال صحيح. الحد الأقصى {fmtN(MAX_PTS)} نقطة.</div>
       {people && !list.length && <p className="cm-empty">لا يوجد متصدّرون بعد. أكمل موديولًا واحفظ ملفك لتظهر هنا.</p>}
-      <ol className="lb">
-        {list.slice(0, n).map((x, i) => (
-          <li key={x.id} className={'lb-r' + (x.me || x.id === me ? ' me' : '') + (i < 3 ? ' top' : '')}>
-            <span className="lb-n">{TOP(i)}</span>
-            <Av p={x} name={x.name} s={38} />
-            <span className="lb-w"><b>{x.name || 'متعلّم'}{(x.me || x.id === me) && <em> (أنت)</em>}</b><small>{x.job || rankOf(x.pts)} · {x.mods} موديول · {x.lvls} مستوى</small></span>
-            <span className="lb-p"><b>{x.pts}</b><small>نقطة</small></span>
-          </li>))}
-      </ol>
-      {list.length > n && <button className="cm-more" onClick={() => setN(v => v + 10)}>إظهار المزيد ({list.length - n})</button>}
+      {first && <div className="lb-grid">
+        <aside className={'lb-champ' + (isMe(first) ? ' me' : '')} aria-label="المتصدر الأول">
+          <span className="lb-crown">🥇 المركز الأول</span>
+          <Av p={first} name={first.name} s={96} />
+          <h3>{first.name || 'متعلّم'}{isMe(first) && <em> (أنت)</em>}</h3>
+          <p className="lb-job">{first.job || rankOf(first.pts)}</p>
+          {first.bio && <p className="lb-bio">{first.bio}</p>}
+          <div className="lb-st"><span><b>{first.mods}</b>موديول</span><span><b>{first.lvls}</b>مستوى</span><span><b>{rankOf(first.pts)}</b>الرتبة</span></div>
+          <div className="lb-big"><b>{fmtN(first.pts)}</b><small>نقطة</small></div>
+        </aside>
+        <ol className="lb" start={2}>
+          {rest.slice(0, n).map((x, i) => (
+            <li key={x.id} className={'lb-r' + (isMe(x) ? ' me' : '') + (i < 2 ? ' top' : '')}>
+              <span className="lb-n">{TOP(i + 1)}</span>
+              <Av p={x} name={x.name} s={38} />
+              <span className="lb-w"><b>{x.name || 'متعلّم'}{isMe(x) && <em> (أنت)</em>}</b><small>{x.job || rankOf(x.pts)} · {x.mods} موديول · {x.lvls} مستوى</small></span>
+              <span className="lb-p"><b>{fmtN(x.pts)}</b><small>نقطة</small></span>
+            </li>))}
+          {!rest.length && <li className="cm-empty">أنت أول المتصدرين حاليًا — بانتظار بقية المتعلّمين.</li>}
+        </ol>
+      </div>}
+      {rest.length > n && <button className="cm-more" onClick={() => setN(v => v + 10)}>إظهار المزيد ({rest.length - n})</button>}
     </div>)
 }
 
@@ -154,10 +168,10 @@ function Feed({ name, current, pm }: { name: string; current?: string; pm: Recor
 }
 
 // صفحة المجتمع المستقلة: المتصدرون، التعليقات، ملفي
-export function CommunityPage({ base, mods, lvls, current, onClose }: { base: { name: string; job: string }; mods: number; lvls: number; current?: string; onClose: () => void }) {
+export function CommunityPage({ base, pts, mods, lvls, current, onClose }: { base: { name: string; job: string }; pts: number; mods: number; lvls: number; current?: string; onClose: () => void }) {
   const [tab, setTab] = useState<'lb' | 'feed' | 'me'>('lb')
   const { m, all, refresh } = usePeople()
-  const pts = ptsOf(mods, lvls); const dn = store.get('odoo20-dname') || base.name
+  const dn = store.get('odoo20-dname') || base.name
   useEffect(() => { void store.pushPerson({ ...readProf(base), name: dn, pts, mods, lvls }).then(refresh) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const meId = Object.values(m).find(x => x.me)?.id || ''
   return (
@@ -165,7 +179,7 @@ export function CommunityPage({ base, mods, lvls, current, onClose }: { base: { 
       <header className="ld-top">
         <button className="ld-btn ghost" onClick={onClose}>→ رجوع</button>
         <h1 className="cmp-t">المجتمع</h1>
-        <span className="cmp-pts"><b>{pts}</b> نقطة</span>
+        <span className="cmp-pts"><b>{fmtN(pts)}</b> نقطة</span>
       </header>
       <main className="cmp-main">
         <nav className="cmp-tabs" role="tablist" aria-label="أقسام المجتمع">
