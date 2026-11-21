@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import * as store from './store'
 import { hash } from './Auth'
-import { N } from './Chapter'
+import { N, ORDER } from './Chapter'
 import type { Stat } from './track'
 
 type Row = store.Row
@@ -21,12 +21,43 @@ const ago = (t?: number) => {
 const day = (t?: number) => (t ? new Date(t).toLocaleDateString('ar-EG') : '—')
 const top = (xs: string[], n = 8) => { const c: Record<string, number> = {}; xs.forEach(x => { c[x] = (c[x] || 0) + 1 }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n) }
 
+
+function VideoRow({ k, v, onChanged }: { k: string; v?: store.Vid; onChanged: () => void }) {
+  const [u, setU] = useState(v?.kind === 'link' ? v.url : ''); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState('')
+  const can = store.videoUploadable()
+  const run = async (f: () => Promise<void>, ok: string) => { setBusy(true); setMsg(''); try { await f(); setMsg(ok); onChanged() } catch (e) { const m = (e as Error).message; setMsg(m === 'noassets' ? 'رفع الملفات غير متاح هنا (محتاج صلاحية Editor)' : m === 'nolocal' ? 'رفع الملف محتاج Supabase أو صفحة Claude، استخدم لينك' : 'تعذّر الحفظ، تأكد من الصلاحيات أو حجم الملف') } finally { setBusy(false) } }
+  const saveLink = () => { const x = u.trim(); if (!/^https?:\/\//i.test(x)) return setMsg('اكتب لينك يبدأ بـ https://'); void run(() => store.videoSet(k, { url: x, kind: 'link' }), 'تم حفظ اللينك ✓') }
+  const upload = (f: File | undefined) => { if (!f) return; void run(async () => { const url = await store.videoUpload(k, f); await store.videoSet(k, { url, kind: 'file' }); setU('') }, 'تم رفع الفيديو ✓') }
+  return (
+    <li className="vd-r">
+      <div className="vd-t"><b>{N[k]}</b><span className={'vd-s' + (v ? ' on' : '')}>{v ? (v.kind === 'file' ? '🎞 ملف مرفوع' : '🔗 لينك') : 'البوستر الافتراضي'}</span></div>
+      <div className="vd-f"><input dir="ltr" value={u} onChange={e => setU(e.target.value)} placeholder="لينك يوتيوب / Vimeo / Google Drive / mp4" aria-label={'لينك فيديو ' + N[k]} /><button disabled={busy} onClick={saveLink}>حفظ اللينك</button></div>
+      <div className="vd-f">
+        <label className={'vd-up' + (!can || busy ? ' off' : '')}>⬆ رفع ملف فيديو<input type="file" accept="video/*" hidden disabled={!can || busy} onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }} /></label>
+        {v && <button className="vd-x" disabled={busy} onClick={() => void run(() => store.videoSet(k, null), 'رجع البوستر الافتراضي ✓')}>إزالة الفيديو</button>}
+        {msg && <span className="vd-m" role="status">{msg}</span>}
+      </div>
+    </li>)
+}
+function VideosAdmin() {
+  const [m, setM] = useState<Record<string, store.Vid>>({})
+  const load = () => { void store.videoList(true).then(setM) }
+  useEffect(load, [])
+  return (
+    <section className="vd">
+      <h2>🎬 فيديوهات الموديولات</h2>
+      <p className="adm-note">كل موديول بيظهر فيه بوستر بمقاس الفيديو (16:9). حط لينك أو ارفع ملف فيفضل مكان البوستر، وإزالة الفيديو بترجّع البوستر. ملفات الفيديو على صفحة Claude حدّها نحو 20 ميجا، فاللينك أنسب للفيديوهات الكبيرة.</p>
+      <ul>{ORDER.map(k => <VideoRow key={k} k={k} v={m[k]} onChanged={load} />)}</ul>
+    </section>)
+}
+
 export function Admin({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'boot' | 'denied' | 'sb' | 'local-setup' | 'local-in' | 'ok'>('boot')
   const [rows, setRows] = useState<Row[]>([])
   const [em, setEm] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [src, setSrc] = useState<'claude' | 'sb' | 'local'>('local')
+  const [tab, setTab] = useState<'ov' | 'rep' | 'users' | 'vid'>('ov')
 
   const route = async () => {
     const c = await store.adminClaude()
@@ -90,15 +121,24 @@ export function Admin({ onClose }: { onClose: () => void }) {
       <header className="adm-h"><h1>🛡️ لوحة الأدمن</h1>
         <span className="adm-src">{src === 'claude' ? 'قاعدة Claude' : src === 'sb' ? 'Supabase' : 'الجهاز ده فقط'}</span>
         <button onClick={refresh} disabled={busy}>تحديث</button><button onClick={out}>خروج</button></header>
+      <nav className="adm-tabs" role="tablist" aria-label="أقسام لوحة الأدمن">
+        {([['ov', '📊 نظرة عامة'], ['rep', '📈 تقارير الاستخدام'], ['users', `👥 المستخدمين (${users.length})`], ['vid', '🎬 فيديوهات الموديولات']] as const).map(([id, t]) =>
+          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t}</button>)}
+      </nav>
+      {tab === 'ov' && <>
       <div className="adm-k">
         {[['المستخدمين', agg.n], ['نشطين آخر 24 ساعة', agg.d1], ['نشطين آخر 7 أيام', agg.d7], ['مرات الدخول', agg.visits], ['موديولات مكتملة', agg.done], ['اختبارات (نجح/كلها)', `${agg.passes}/${agg.exams}`]].map(([l, v]) =>
           <div key={String(l)} className="adm-c"><b>{v}</b><span>{l}</span></div>)}
       </div>
+      </>}
+      {tab === 'rep' && <>
       <div className="adm-2">
         <section><h2>أكتر موديولات اتفتحت</h2>{agg.mods.length ? <ol>{agg.mods.map(([k, v]) => <li key={k}>{N[k] || k} <i>{v}</i></li>)}</ol> : <p>لسه مفيش بيانات.</p>}</section>
         <section><h2>أكتر حاجات اتبحث عنها</h2>{agg.searches.length ? <ol>{agg.searches.map(([k, v]) => <li key={k}>{k} <i>{v}</i></li>)}</ol> : <p>لسه مفيش بحث.</p>}</section>
         <section><h2>شغل المستخدمين</h2>{agg.jobs.length ? <ol>{agg.jobs.map(([k, v]) => <li key={k}>{k} <i>{v}</i></li>)}</ol> : <p>—</p>}</section>
       </div>
+      </>}
+      {tab === 'users' && <>
       <h2>المستخدمين ({users.length})</h2>
       <p className="adm-note">الباسوردات مش بتظهر هنا: بتتخزن مشفّرة (مش نص) فمحدش يقدر يقراها، ودي حماية للمستخدمين.</p>
       <div className="adm-t"><table><thead><tr><th>الاسم</th><th>الشغل</th><th>الإيميل</th><th>سجّل</th><th>آخر دخول</th><th>دخل</th><th>موديولات</th><th>مستويات</th><th>اختبارات</th></tr></thead>
@@ -110,6 +150,8 @@ export function Admin({ onClose }: { onClose: () => void }) {
               <b>أكتر موديولات بيفتحها:</b> {Object.entries(u.s.mods || {}).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${N[k] || k} (${v})`).join('، ') || '—'}<br />
               <b>آخر بحث:</b> {(u.s.searches || []).slice(0, 10).join('، ') || '—'}</td></tr>}
           </Fragment>)}</tbody></table></div>
+      </>}
+      {tab === 'vid' && <VideosAdmin />}
       <button className="adm-back" onClick={onClose}>رجوع للموقع</button>
     </div>)
 }

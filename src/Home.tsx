@@ -5,9 +5,9 @@ import { unlocked, type Passed } from './Levels'
 import { ILL } from './Stations'
 
 // الصفحة الرئيسية: كل الموديولات في كروت، وجنب كل واحد حالته (مكتمل / مفتوح / مغلق + اختبار دخول)
-export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, pts, onTheme, theme, onOut }: {
+export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, onSettings, pts, onTheme, theme, onOut }: {
   name: string; passed: Passed; done: Record<string, boolean>; started: boolean; onStart: () => void; onModule: (k: string) => void
-  onSearch: () => void; onComm: () => void; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void
+  onSearch: () => void; onComm: () => void; onSettings: () => void; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void
 }) {
   const doneN = ORDER.filter(k => done[k]).length, passN = Object.values(passed).filter(Boolean).length
   return (
@@ -17,6 +17,7 @@ export function Home({ name, passed, done, started, onStart, onModule, onSearch,
         <div className="ent-act">
           <button onClick={onComm}>👥 المجتمع</button>
           <button onClick={onSearch} aria-label="بحث">🔍</button>
+          <button onClick={onSettings} aria-label="الإعدادات" title="الإعدادات">⚙</button>
           <button onClick={onTheme} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀ فاتح' : '☾ داكن'}</button>
           <button onClick={onOut}>خروج</button>
         </div>

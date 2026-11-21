@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as store from './store'
 import { N, ORDER } from './Chapter'
 import { LEVELS } from './levels'
@@ -33,41 +33,101 @@ function useCmts() {
   return { all, refresh }
 }
 
-function Composer({ k, name, onDone, picker }: { k: string; name: string; onDone: () => void; picker?: boolean }) {
+const EMO = ['👍', '❤️', '💡', '🎉']
+const mkey = (n: string) => n.trim().replace(/\s+/g, '_')
+const MENTION = /@[\w\u0600-\u06FF_]+/g
+
+function useRx() {
+  const [all, setAll] = useState<store.Rx[]>([])
+  const refresh = useCallback(async () => setAll(await store.rxList()), [])
+  useEffect(() => { refresh() }, [refresh])
+  const toggle = async (c: string, e: string) => {
+    const mine = all.filter(x => x.c === c && x.mine).map(x => x.e); const had = mine.includes(e)
+    setAll(l => [...l.filter(x => !(x.c === c && x.mine)), ...(had ? [] : [{ c, e, u: 'me', mine: true }])])
+    try { for (const o of mine) if (o !== e || had) await store.rxToggle(c, o, false); if (!had) await store.rxToggle(c, e, true) } catch { /* بنرجّع الحالة الحقيقية */ } finally { refresh() }
+  }
+  return { all, toggle }
+}
+
+function Body({ text, me }: { text: string; me: string }) {
+  const parts: React.ReactNode[] = []; let last = 0
+  for (const m of text.matchAll(MENTION)) {
+    const i = m.index ?? 0; if (i > last) parts.push(text.slice(last, i))
+    parts.push(<span key={i} className={'cm-mn' + (me && m[0] === '@' + mkey(me) ? ' me' : '')}>{m[0].replace(/_/g, ' ')}</span>); last = i + m[0].length
+  }
+  parts.push(text.slice(last)); return <p>{parts}</p>
+}
+
+type Reply = { id: string; name: string; root?: boolean }
+function Composer({ k, name, onDone, picker, people, reply, onCancel }: { k: string; name: string; onDone: () => void; picker?: boolean; people: store.Person[]; reply?: Reply | null; onCancel?: () => void }) {
   const [t, setT] = useState(''); const [m, setM] = useState(k); const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
+  useEffect(() => { if (reply && !reply.root) setT(x => (x.startsWith('@') ? x : '@' + mkey(reply.name) + ' ' + x)) }, [reply])
+  const q = /@([\w\u0600-\u06FF_]*)$/.exec(t)
+  const sug = q ? people.filter(x => x.name && !x.me && mkey(x.name).includes(q[1])).slice(0, 5) : []
   const send = async (e: React.FormEvent) => {
     e.preventDefault(); const x = t.trim(); if (!x) return
     setBusy(true); setErr('')
-    try { await store.cmtAdd(m, name, x); setT(''); onDone() } catch { setErr('تعذّر إرسال التعليق، تأكد من صلاحية الكتابة أو الاتصال.') } finally { setBusy(false) }
+    try { await store.cmtAdd(m, name, x, reply || undefined); setT(''); onCancel?.(); onDone() } catch { setErr('تعذّر إرسال التعليق، تأكد من صلاحية الكتابة أو الاتصال.') } finally { setBusy(false) }
   }
   return (
     <form className="cm-form" onSubmit={send}>
+      {reply && <div className="cm-rp">↩ رد على <b>{reply.name}</b><button type="button" onClick={() => { setT(''); onCancel?.() }} aria-label="إلغاء الرد">×</button></div>}
       {picker && <select aria-label="الموديول" value={m} onChange={e => setM(e.target.value)}><option value="general">عام</option>{ORDER.map(o => <option key={o} value={o}>{N[o]}</option>)}</select>}
-      <textarea value={t} onChange={e => setT(e.target.value)} maxLength={400} rows={2} placeholder="اكتب تعليقك…" aria-label="تعليقك" />
+      <textarea autoFocus={!!reply} value={t} onChange={e => setT(e.target.value)} maxLength={400} rows={2} placeholder="اكتب تعليقك… (اكتب @ لعمل منشن لعضو)" aria-label="تعليقك" />
+      {!!sug.length && <ul className="cm-sug" role="listbox">{sug.map(x => <li key={x.id}><button type="button" onClick={() => setT(v => v.replace(/@([\w\u0600-\u06FF_]*)$/, '@' + mkey(x.name) + ' '))}><Av p={x} name={x.name} s={20} />{x.name}</button></li>)}</ul>}
       <div className="cm-row"><span className="cm-err">{err}</span><button disabled={busy || !t.trim()}>{busy ? '…' : 'إرسال'}</button></div>
     </form>)
 }
 
-function Item({ c, tag, onDel, pm }: { c: store.Cmt; tag?: boolean; onDel: () => void; pm: Record<string, store.Person> }) {
+function Item({ c, tag, onDel, pm, rx, onReact, onReply, parent, meName, form }: { c: store.Cmt; tag?: boolean; onDel: () => void; pm: Record<string, store.Person>; rx: store.Rx[]; onReact: (e: string) => void; onReply: () => void; parent?: store.Cmt; meName: string; form?: React.ReactNode }) {
   return (
-    <li className="cm-it">
+    <div className="cm-it" id={'c-' + c.id}>
       <div className="cm-h"><Av p={pm[c.uid]} name={c.name} s={22} /><b>{c.name}</b>{tag && <span className="cm-tag">{label(c.k)}</span>}<time>{ago(c.t)}</time>{c.mine && <button className="cm-x" onClick={onDel} aria-label="حذف تعليقي" title="حذف">×</button>}</div>
-      <p>{c.text}</p>
-    </li>)
+      {c.rep && parent && <div className="cm-q">↩ {c.rn || 'تعليق'}{parent ? ': ' + parent.text.slice(0, 70) + (parent.text.length > 70 ? '…' : '') : ''}</div>}
+      <Body text={c.text} me={meName} />
+      <div className="cm-act">
+        {EMO.map(e => { const n = rx.filter(x => x.e === e).length, on = rx.some(x => x.e === e && x.mine); return <button key={e} className={'cm-rx' + (on ? ' on' : '')} aria-pressed={on} onClick={() => onReact(e)}>{e}{n > 0 && <span>{n}</span>}</button> })}
+        <button className="cm-rp-b" onClick={onReply}>↩ رد</button>
+      </div>
+      {form}
+    </div>)
+}
+
+type TProps = { all: store.Cmt[]; pm: Record<string, store.Person>; meName: string; rxs: store.Rx[]; toggle: (c: string, e: string) => void; rep: Reply | null; setRep: (r: Reply | null) => void; refresh: () => void; tag?: boolean }
+// بيجمّع الردود تحت التعليق الأصلي (أي رد على رد بيتحط تحت نفس الأصل)
+function threads(list: store.Cmt[], all: store.Cmt[]) {
+  const by = new Map(all.map(c => [c.id, c])); const rootOf = (c: store.Cmt) => { let x = c, n = 0; while (x.rep && by.has(x.rep) && n++ < 20) x = by.get(x.rep)!; return x }
+  const roots = list.filter(c => rootOf(c).id === c.id)
+  const rs = new Map<string, store.Cmt[]>()
+  for (const c of list) { const r = rootOf(c); if (r.id !== c.id) rs.set(r.id, [...(rs.get(r.id) || []), c]) }
+  rs.forEach(v => v.sort((a, b) => a.t - b.t))
+  return { roots, rs }
+}
+function Thread({ root, replies, t }: { root: store.Cmt; replies: store.Cmt[]; t: TProps }) {
+  const people = Object.values(t.pm)
+  const one = (c: store.Cmt, isRoot: boolean) => (
+    <Item key={c.id} c={c} tag={isRoot && t.tag} pm={t.pm} meName={t.meName} rx={t.rxs.filter(x => x.c === c.id)} onReact={e => t.toggle(c.id, e)}
+      onReply={() => t.setRep(t.rep?.id === c.id ? null : { id: c.id, name: c.name, root: isRoot })}
+      form={t.rep?.id === c.id ? <Composer k={c.k} name={t.meName} onDone={t.refresh} people={people} reply={t.rep} onCancel={() => t.setRep(null)} /> : undefined}
+      parent={!isRoot && c.rep !== root.id ? t.all.find(x => x.id === c.rep) : undefined}
+      onDel={async () => { await store.cmtDel(c.id); t.refresh() }} />)
+  return <li className="cm-th">{one(root, true)}{replies.length > 0 && <ul className="cm-rs" aria-label="الردود">{replies.map(r => <li key={r.id}>{one(r, false)}</li>)}</ul>}</li>
 }
 
 // تعليقات تحت كل موديول: تعليق واحد ظاهر + «إظهار المزيد»
 export function ModuleComments({ k, name }: { k: string; name: string }) {
-  const { all, refresh } = useCmts(); const { m: pm } = usePeople(); const [more, setMore] = useState(false)
+  const { all, refresh } = useCmts(); const { m: pm } = usePeople(); const { all: rxs, toggle } = useRx(); const [more, setMore] = useState(false); const [rep, setRep] = useState<Reply | null>(null)
   const list = (all || []).filter(c => c.k === k)
-  const shown = more ? list : list.slice(0, 1)
+  const { roots, rs } = threads(list, all || [])
+  const shown = more ? roots : roots.slice(0, 1)
+  const t: TProps = { all: all || [], pm, meName: name, rxs, toggle, rep, setRep, refresh }
   return (
     <section className="cm" aria-label="تعليقات الموديول">
       <h4>تعليقات المجتمع{list.length ? ` (${list.length})` : ''}</h4>
-      <Composer k={k} name={name} onDone={refresh} />
+      <Composer k={k} name={name} onDone={refresh} people={Object.values(pm)} />
       {all && !list.length && <p className="cm-empty">لا توجد تعليقات بعد. كن أول من يعلّق.</p>}
-      <ul>{shown.map(c => <Item key={c.id} c={c} pm={pm} onDel={async () => { await store.cmtDel(c.id); refresh() }} />)}</ul>
-      {list.length > 1 && <button className="cm-more" onClick={() => setMore(m => !m)}>{more ? 'إخفاء' : `إظهار المزيد (${list.length - 1})`}</button>}
+      <ul>{shown.map(c => <Thread key={c.id} root={c} replies={rs.get(c.id) || []} t={t} />)}</ul>
+      {roots.length > 1 && <button className="cm-more" onClick={() => setMore(m => !m)}>{more ? 'إخفاء' : `إظهار المزيد (${roots.length - 1})`}</button>}
     </section>)
 }
 
@@ -93,7 +153,7 @@ export const readProf = (base: { name: string; job: string }): Prof => ({
   name: store.get('odoo20-dname') || base.name, job: store.get('odoo20-djob') ?? base.job, bio: store.get('odoo20-bio') || '', avatar: store.get('odoo20-avatar') || '',
 })
 
-function ProfileTab({ base, pts, mods, lvls, onSaved }: { base: { name: string; job: string }; pts: number; mods: number; lvls: number; onSaved: () => void }) {
+export function ProfileTab({ base, pts, mods, lvls, onSaved }: { base: { name: string; job: string }; pts: number; mods: number; lvls: number; onSaved: () => void }) {
   const [p, setP] = useState<Prof>(() => readProf(base)); const [ok, setOk] = useState(false); const [err, setErr] = useState('')
   const up = (k: keyof Prof, v: string) => { setP(x => ({ ...x, [k]: v })); setOk(false) }
   const pick = async (f?: File) => { if (!f) return; try { up('avatar', await resizeImg(f)) } catch { setErr('تعذّر قراءة الصورة، جرّب صورة أخرى.') } }
@@ -155,21 +215,70 @@ function Board({ people, me }: { people: store.Person[] | null; me: string }) {
 }
 
 function Feed({ name, current, pm }: { name: string; current?: string; pm: Record<string, store.Person> }) {
-  const { all, refresh } = useCmts(); const [f, setF] = useState('all'); const [n, setN] = useState(5)
+  const { all, refresh } = useCmts(); const { all: rxs, toggle } = useRx(); const [f, setF] = useState('all'); const [n, setN] = useState(5); const [rep, setRep] = useState<Reply | null>(null)
   const list = (all || []).filter(c => f === 'all' || c.k === f)
+  const { roots, rs } = threads(list, all || [])
+  const t: TProps = { all: all || [], pm, meName: name, rxs, toggle, rep, setRep, refresh, tag: true }
   return (
     <div className="cm-feed">
-      <Composer k={current && ORDER.includes(current) ? current : 'general'} name={name} onDone={refresh} picker />
+      <Composer k={current && ORDER.includes(current) ? current : 'general'} name={name} onDone={refresh} picker people={Object.values(pm)} />
       <select className="cm-f" aria-label="تصفية" value={f} onChange={e => { setF(e.target.value); setN(5) }}><option value="all">كل التعليقات</option><option value="general">عام</option>{ORDER.map(o => <option key={o} value={o}>{N[o]}</option>)}</select>
       {all && !list.length && <p className="cm-empty">لا توجد تعليقات.</p>}
-      <ul>{list.slice(0, n).map(c => <Item key={c.id} c={c} tag pm={pm} onDel={async () => { await store.cmtDel(c.id); refresh() }} />)}</ul>
-      {list.length > n && <button className="cm-more" onClick={() => setN(x => x + 10)}>إظهار المزيد ({list.length - n})</button>}
+      <ul>{roots.slice(0, n).map(c => <Thread key={c.id} root={c} replies={rs.get(c.id) || []} t={t} />)}</ul>
+      {roots.length > n && <button className="cm-more" onClick={() => setN(x => x + 10)}>إظهار المزيد ({roots.length - n})</button>}
+    </div>)
+}
+
+// ---- المسابقة الأسبوعية: نفس الأسئلة لكل المتعلّمين، محاولة واحدة في الأسبوع ----
+const DAY = 864e5
+const weekNo = () => Math.floor((Date.now() - 2 * DAY) / (7 * DAY)) // الأسبوع بيبدأ السبت (UTC)
+const daysLeft = () => 7 - (Math.floor((Date.now() - 2 * DAY) / DAY) % 7)
+const rng = (seed: number) => () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+function seededShuffle<T>(a: T[], r: () => number) { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [x[i], x[j]] = [x[j], x[i]] } return x }
+const CN = 10
+function weekQs(w: number) {
+  const r = rng(w * 7919 + 13)
+  return seededShuffle(LEVELS.flatMap(l => l.exam), r).slice(0, CN).map(q => ({ ...q, opts: seededShuffle([q.ok, ...q.bad], r) }))
+}
+
+function Contest({ people, me, onDone }: { people: store.Person[] | null; me: string; onDone: () => void }) {
+  const w = weekNo(); const qs = useMemo(() => weekQs(w), [w])
+  const [mine, setMine] = useState<store.Contest | null>(() => { const c = store.readContest(); return c && c.w === w ? c : null })
+  const [run, setRun] = useState(false); const [ans, setAns] = useState<Record<number, string>>({})
+  const submit = () => {
+    const s = qs.filter((q, i) => ans[i] === q.ok).length; const c = { w, s, n: CN }
+    store.set('odoo20-contest', JSON.stringify(c)); setMine(c); setRun(false); onDone()
+  }
+  const board = (people || []).filter(x => x.cw === w && x.cs != null).sort((a, b) => (b.cs || 0) - (a.cs || 0) || a.t - b.t)
+  return (
+    <div className="ct">
+      <section className="ct-box">
+        <h3>🏆 مسابقة الأسبوع</h3>
+        <p>{CN} أسئلة مشتركة لكل المتعلّمين من مناهج المستويات كلها، <b>محاولة واحدة</b> في الأسبوع، ولا تؤثّر على النقاط ولا يوجد خصم. تتجدد بعد {daysLeft()} {daysLeft() > 2 ? 'أيام' : 'يوم'}.</p>
+        {!mine && !run && <button className="cta" onClick={() => setRun(true)}>ابدأ المسابقة</button>}
+        {mine && <div className="ct-done" role="status"><b>{mine.s}/{mine.n}</b><span>نتيجتك هذا الأسبوع. نلتقي الأسبوع القادم بأسئلة جديدة.</span></div>}
+        {run && <>
+          <ol className="exq">{qs.map((q, i) => (
+            <li key={i}><b>{q.q}</b>
+              <div className="exo" role="radiogroup">{q.opts.map(o => <label key={o} className="exopt"><input type="radio" name={`ct${w}-${i}`} checked={ans[i] === o} onChange={() => setAns(a => ({ ...a, [i]: o }))} />{o}</label>)}</div>
+            </li>))}</ol>
+          <button className="cta" disabled={Object.keys(ans).length < CN} onClick={submit}>سلّم الإجابات</button>
+        </>}
+      </section>
+      <h4 className="ct-h">ترتيب مسابقة هذا الأسبوع</h4>
+      {people && !board.length && <p className="cm-empty">لا توجد نتائج بعد. كن أول من يشارك.</p>}
+      <ol className="lb">{board.slice(0, 20).map((x, i) => (
+        <li key={x.id} className={'lb-r' + (x.me || x.id === me ? ' me' : '') + (i < 3 ? ' top' : '')}>
+          <span className="lb-n">{TOP(i)}</span><Av p={x} name={x.name} s={38} />
+          <span className="lb-w"><b>{x.name || 'متعلّم'}{(x.me || x.id === me) && <em> (أنت)</em>}</b><small>{x.job || rankOf(x.pts)}</small></span>
+          <span className="lb-p"><b>{x.cs}/{x.cn || CN}</b><small>صح</small></span>
+        </li>))}</ol>
     </div>)
 }
 
 // صفحة المجتمع المستقلة: المتصدرون، التعليقات، ملفي
 export function CommunityPage({ base, pts, mods, lvls, current, onClose }: { base: { name: string; job: string }; pts: number; mods: number; lvls: number; current?: string; onClose: () => void }) {
-  const [tab, setTab] = useState<'lb' | 'feed' | 'me'>('lb')
+  const [tab, setTab] = useState<'lb' | 'ct' | 'feed'>('lb')
   const { m, all, refresh } = usePeople()
   const dn = store.get('odoo20-dname') || base.name
   useEffect(() => { void store.pushPerson({ ...readProf(base), name: dn, pts, mods, lvls }).then(refresh) }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -183,12 +292,12 @@ export function CommunityPage({ base, pts, mods, lvls, current, onClose }: { bas
       </header>
       <main className="cmp-main">
         <nav className="cmp-tabs" role="tablist" aria-label="أقسام المجتمع">
-          {([['lb', 'المتصدرون'], ['feed', 'التعليقات'], ['me', 'ملفي']] as const).map(([id, t]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t}</button>)}
+          {([['lb', 'المتصدرون'], ['ct', 'المسابقات'], ['feed', 'التعليقات']] as const).map(([id, t]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t}</button>)}
         </nav>
         <p className="cm-note">{store.cmtShared() ? 'مساحة مشتركة بين المتعلّمين لتبادل الأسئلة والملاحظات ومتابعة الترتيب.' : 'أنت تستخدم الموقع بدون قاعدة بيانات مشتركة، لذلك تظهر بياناتك هنا لك وحدك.'}</p>
         {tab === 'lb' && <Board people={all} me={meId} />}
+        {tab === 'ct' && <Contest people={all} me={meId} onDone={() => { void store.pushPerson({ ...readProf(base), pts, mods, lvls }).then(refresh) }} />}
         {tab === 'feed' && <Feed name={dn} current={current} pm={m} />}
-        {tab === 'me' && <ProfileTab base={base} pts={pts} mods={mods} lvls={lvls} onSaved={refresh} />}
       </main>
     </div>)
 }

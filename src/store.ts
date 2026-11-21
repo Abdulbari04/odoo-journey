@@ -126,7 +126,7 @@ export async function adminSb(email: string, password: string): Promise<Row[]> {
 export async function adminSbOut() { try { await ensureSb(); await sb.auth.signOut() } catch { /* ignore */ } }
 
 // ---- المجتمع: تعليقات الموديولات ----
-export type Cmt = { id: string; uid: string; k: string; name: string; text: string; t: number; mine: boolean }
+export type Cmt = { id: string; uid: string; k: string; name: string; text: string; t: number; mine: boolean; rep?: string; rn?: string }
 const LOCAL_C = 'odoo20-comments'
 const rdLocal = (): Cmt[] => { try { return JSON.parse(localStorage.getItem(LOCAL_C) || '[]') } catch { return [] } }
 export async function cmtList(): Promise<Cmt[]> {
@@ -136,21 +136,24 @@ export async function cmtList(): Promise<Cmt[]> {
       const snap = await dbh.collection('comments').get()
       for (const d of snap.docs) for (const it of (d.data().items || [])) out.push({ ...it, uid: d.id, mine: d.id === cloud.uid })
     } else if (backend === 'sb' && sb && cloud) {
-      const r = await sb.from('comments').select('id,user_id,name,module,text,created_at').order('created_at', { ascending: false }).limit(300)
+      let r = await sb.from('comments').select('id,user_id,name,module,text,created_at,reply_to,reply_name').order('created_at', { ascending: false }).limit(300)
+      if (r.error) r = await sb.from('comments').select('id,user_id,name,module,text,created_at').order('created_at', { ascending: false }).limit(300)
       if (r.error) throw r.error
-      out = r.data.map((x: any) => ({ id: x.id, uid: x.user_id, k: x.module, name: x.name, text: x.text, t: Date.parse(x.created_at), mine: x.user_id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
+      out = r.data.map((x: any) => ({ id: x.id, uid: x.user_id, k: x.module, name: x.name, text: x.text, t: Date.parse(x.created_at), mine: x.user_id === cloud!.uid, rep: x.reply_to || undefined, rn: x.reply_name || undefined })) // eslint-disable-line @typescript-eslint/no-explicit-any
     } else out = rdLocal().map(c => ({ ...c, uid: 'me', mine: true }))
   } catch { /* لو التحميل فشل نعرض قايمة فاضية */ }
   return out.sort((a, b) => b.t - a.t)
 }
-export async function cmtAdd(k: string, name: string, text: string): Promise<void> {
-  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), k, name, text: text.slice(0, 400), t: Date.now() }
+export async function cmtAdd(k: string, name: string, text: string, reply?: { id: string; name: string }): Promise<void> {
+  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), k, name, text: text.slice(0, 400), t: Date.now(), ...(reply ? { rep: reply.id, rn: reply.name } : {}) }
   if (backend === 'claude' && cloud && dbh) {
     const ref = dbh.doc('comments/' + cloud.uid); const snap = await ref.get()
     const items = ((snap.exists ? snap.data().items : []) || []) as object[]
     await ref.set({ items: [...items, c].slice(-100) })
   } else if (backend === 'sb' && sb && cloud) {
-    const r = await sb.from('comments').insert({ user_id: cloud.uid, name, module: k, text: c.text }); if (r.error) throw r.error
+    let r = await sb.from('comments').insert({ user_id: cloud.uid, name, module: k, text: c.text, ...(reply ? { reply_to: reply.id, reply_name: reply.name } : {}) })
+    if (r.error && reply) r = await sb.from('comments').insert({ user_id: cloud.uid, name, module: k, text: c.text })
+    if (r.error) throw r.error
   } else localStorage.setItem(LOCAL_C, JSON.stringify([...rdLocal(), c].slice(-200)))
 }
 export async function cmtDel(id: string): Promise<void> {
@@ -163,14 +166,25 @@ export async function cmtDel(id: string): Promise<void> {
 export const cmtShared = () => backend !== 'local'
 
 // ---- الملفات الشخصية والمتصدرين ----
-export type Person = { id: string; name: string; job: string; bio: string; avatar: string; pts: number; mods: number; lvls: number; t: number; me: boolean }
+export type Person = { id: string; name: string; job: string; bio: string; avatar: string; pts: number; mods: number; lvls: number; t: number; me: boolean; cw?: number; cs?: number; cn?: number; code?: string; inv?: string }
 const LOCAL_P = 'odoo20-person'
-export async function pushPerson(p: Omit<Person, 'id' | 't' | 'me'>): Promise<void> {
-  const t = Date.now()
+// بيانات إضافية بتتبعت مع الملف الشخصي: نتيجة المسابقة وكود الدعوة
+export type Contest = { w: number; s: number; n: number }
+export const readContest = (): Contest | null => { try { return JSON.parse(get('odoo20-contest') || 'null') } catch { return null } }
+export function myCode(): string {
+  let c = get('odoo20-code')
+  if (!c) { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; c = Array.from({ length: 6 }, () => A[Math.floor(Math.random() * A.length)]).join(''); set('odoo20-code', c) }
+  return c
+}
+export async function pushPerson(p0: Omit<Person, 'id' | 't' | 'me'>): Promise<void> {
+  const t = Date.now(); const ct = readContest(); const inv = get('odoo20-inv') || ''
+  const p = { ...p0, code: myCode(), inv, ...(ct ? { cw: ct.w, cs: ct.s, cn: ct.n } : {}) }
   try {
     if (backend === 'claude' && cloud && dbh) await dbh.doc('people/' + cloud.uid).set({ ...p, t })
     else if (backend === 'sb' && sb && cloud) {
-      const r = await sb.from('people').upsert({ user_id: cloud.uid, name: p.name, job: p.job, bio: p.bio, avatar: p.avatar, pts: p.pts, mods: p.mods, lvls: p.lvls, updated_at: new Date(t).toISOString() })
+      const base = { user_id: cloud.uid, name: p.name, job: p.job, bio: p.bio, avatar: p.avatar, pts: p.pts, mods: p.mods, lvls: p.lvls, updated_at: new Date(t).toISOString() }
+      let r = await sb.from('people').upsert({ ...base, code: p.code, inv: p.inv, cw: p.cw ?? null, cs: p.cs ?? null, cn: p.cn ?? null })
+      if (r.error) r = await sb.from('people').upsert(base)
       if (r.error) throw r.error
     } else localStorage.setItem(LOCAL_P, JSON.stringify({ ...p, t }))
   } catch { /* مش لازم يوقّف الموقع */ }
@@ -182,11 +196,95 @@ export async function listPeople(): Promise<Person[]> {
       return snap.docs.map((d: any) => ({ id: d.id, name: '', job: '', bio: '', avatar: '', pts: 0, mods: 0, lvls: 0, t: 0, ...d.data(), me: d.id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
     }
     if (backend === 'sb' && sb && cloud) {
-      const r = await sb.from('people').select('user_id,name,job,bio,avatar,pts,mods,lvls,updated_at').order('pts', { ascending: false }).limit(200)
+      let r = await sb.from('people').select('user_id,name,job,bio,avatar,pts,mods,lvls,updated_at,code,inv,cw,cs,cn').order('pts', { ascending: false }).limit(200)
+      if (r.error) r = await sb.from('people').select('user_id,name,job,bio,avatar,pts,mods,lvls,updated_at').order('pts', { ascending: false }).limit(200)
       if (r.error) throw r.error
-      return r.data.map((x: any) => ({ id: x.user_id, name: x.name, job: x.job || '', bio: x.bio || '', avatar: x.avatar || '', pts: x.pts, mods: x.mods, lvls: x.lvls, t: Date.parse(x.updated_at), me: x.user_id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
+      return r.data.map((x: any) => ({ id: x.user_id, name: x.name, job: x.job || '', bio: x.bio || '', avatar: x.avatar || '', pts: x.pts, mods: x.mods, lvls: x.lvls, cw: x.cw ?? undefined, cs: x.cs ?? undefined, cn: x.cn ?? undefined, code: x.code || undefined, inv: x.inv || undefined, t: Date.parse(x.updated_at), me: x.user_id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
     }
     const m = JSON.parse(localStorage.getItem(LOCAL_P) || 'null')
     return m ? [{ id: 'me', ...m, me: true }] : []
   } catch { return [] }
+}
+
+// ---- التفاعلات على التعليقات ----
+export type Rx = { c: string; u: string; e: string; mine: boolean }
+const LOCAL_R = 'odoo20-rx'
+export async function rxList(): Promise<Rx[]> {
+  try {
+    if (backend === 'claude' && cloud && dbh) {
+      const snap = await dbh.collection('reactions').get(); const out: Rx[] = []
+      for (const d of snap.docs) for (const it of (d.data().items || [])) out.push({ c: it.c, e: it.e, u: d.id, mine: d.id === cloud.uid })
+      return out
+    }
+    if (backend === 'sb' && sb && cloud) {
+      const r = await sb.from('reactions').select('comment_id,user_id,emoji').limit(3000); if (r.error) throw r.error
+      return r.data.map((x: any) => ({ c: x.comment_id, u: x.user_id, e: x.emoji, mine: x.user_id === cloud!.uid })) // eslint-disable-line @typescript-eslint/no-explicit-any
+    }
+    return (JSON.parse(localStorage.getItem(LOCAL_R) || '[]') as { c: string; e: string }[]).map(x => ({ ...x, u: 'me', mine: true }))
+  } catch { return [] }
+}
+// بيضيف التفاعل لو مش موجود وبيشيله لو موجود (تفاعل واحد من كل نوع لكل شخص على التعليق)
+export async function rxToggle(c: string, e: string, on: boolean): Promise<void> {
+  if (backend === 'claude' && cloud && dbh) {
+    const ref = dbh.doc('reactions/' + cloud.uid); const snap = await ref.get()
+    const items = ((snap.exists ? snap.data().items : []) || []) as { c: string; e: string }[]
+    const rest = items.filter(x => !(x.c === c && x.e === e))
+    await ref.set({ items: (on ? [...rest, { c, e }] : rest).slice(-300) })
+  } else if (backend === 'sb' && sb && cloud) {
+    const r = on ? await sb.from('reactions').upsert({ comment_id: c, user_id: cloud.uid, emoji: e }) : await sb.from('reactions').delete().eq('comment_id', c).eq('user_id', cloud.uid).eq('emoji', e)
+    if (r.error) throw r.error
+  } else {
+    const items = (JSON.parse(localStorage.getItem(LOCAL_R) || '[]') as { c: string; e: string }[]).filter(x => !(x.c === c && x.e === e))
+    localStorage.setItem(LOCAL_R, JSON.stringify(on ? [...items, { c, e }] : items))
+  }
+}
+
+// ---- فيديوهات شرح الموديولات (الأدمن بيرفعها أو يحط لينك، والكل بيشوفها) ----
+export type Vid = { url: string; kind: 'link' | 'file' }
+const LOCAL_V = 'odoo20-videos'
+let vcache: Promise<Record<string, Vid>> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const cw = () => (window as unknown as { claude?: { use(n: string): Promise<any> } }).claude
+async function cdb() { if (dbh) return dbh; try { const c = cw(); return c?.use ? await c.use('db') : null } catch { return null } }
+const rdV = (): Record<string, Vid> => { try { return JSON.parse(localStorage.getItem(LOCAL_V) || '{}') } catch { return {} } }
+export function videoList(force = false): Promise<Record<string, Vid>> {
+  if (!vcache || force) {
+    vcache = (async () => {
+      let out: Record<string, Vid> = {}
+      try {
+        const db = backend !== 'sb' ? await cdb() : null
+        if (db) { const snap = await db.collection('videos').get(); for (const d of snap.docs) { const x = d.data(); if (x?.url) out[d.id] = { url: x.url, kind: x.kind === 'file' ? 'file' : 'link' } } }
+        else if (hasSupabase && backend !== 'local') {
+          await ensureSb(); const r = await sb.from('videos').select('module,url,kind'); if (r.error) throw r.error
+          for (const x of r.data) out[x.module] = { url: x.url, kind: x.kind === 'file' ? 'file' : 'link' } // eslint-disable-line
+        } else out = rdV()
+      } catch { /* لو فشل نعرض الصورة الافتراضية */ }
+      return out
+    })()
+  }
+  return vcache
+}
+export async function videoSet(k: string, v: Vid | null): Promise<void> {
+  const db = backend !== 'sb' ? await cdb() : null
+  if (db) { if (v) await db.doc('videos/' + k).set({ url: v.url, kind: v.kind, t: Date.now() }); else await db.doc('videos/' + k).delete() }
+  else if (hasSupabase && backend !== 'local') {
+    await ensureSb()
+    const r = v ? await sb.from('videos').upsert({ module: k, url: v.url, kind: v.kind, updated_at: new Date().toISOString() }) : await sb.from('videos').delete().eq('module', k)
+    if (r.error) throw r.error
+  } else { const m = rdV(); if (v) m[k] = v; else delete m[k]; localStorage.setItem(LOCAL_V, JSON.stringify(m)) }
+  vcache = null
+}
+// رفع ملف فيديو: Supabase Storage أو أصول صفحة Claude. على الجهاز المحلي مفيش مكان مشترك.
+export const videoUploadable = () => (backend !== 'sb' && !!cw()) || (hasSupabase && backend !== 'local')
+export async function videoUpload(k: string, file: File): Promise<string> {
+  if (backend !== 'sb' && cw()) {
+    const a = await cw()!.use('assets'); if (!a) throw new Error('noassets')
+    const r = await a.upload(file); return r.url as string
+  }
+  if (hasSupabase && backend !== 'local') {
+    await ensureSb(); const path = `${k}-${Date.now()}.${(file.name.split('.').pop() || 'mp4').toLowerCase()}`
+    const up = await sb.storage.from('videos').upload(path, file, { upsert: true, contentType: file.type || 'video/mp4' }); if (up.error) throw up.error
+    return sb.storage.from('videos').getPublicUrl(path).data.publicUrl as string
+  }
+  throw new Error('nolocal')
 }

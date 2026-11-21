@@ -1,3 +1,6 @@
+import { Av } from './Community'
+import * as store from './store'
+import { fmtN } from './points'
 import { useState } from 'react'
 import type { User } from './Auth'
 import type { Data } from './types'
@@ -17,8 +20,8 @@ const subs = (k: string, data: Data): [string, string][] => {
   return r
 }
 
-export function Sidebar({ docked, passed, onIntro, cloud, user, onOut, onAbout, open, onClose, active, done, onToggleDone, go, goSub, data }: {
-  docked: boolean; passed: Passed; onIntro: () => void; cloud: boolean; user: User; onOut: () => void; onAbout: () => void; open: boolean; onClose: () => void; active: string | null; done: Record<string, boolean>
+export function Sidebar({ avatar, dname, pts, onSettings, docked, passed, onIntro, cloud, user, onOut, onAbout, open, onClose, active, done, onToggleDone, go, goSub, data }: {
+  avatar: string; dname: string; pts: number; onSettings: () => void; docked: boolean; passed: Passed; onIntro: () => void; cloud: boolean; user: User; onOut: () => void; onAbout: () => void; open: boolean; onClose: () => void; active: string | null; done: Record<string, boolean>
   onToggleDone: (k: string) => void; go: (k: string) => void; goSub: (k: string, id: string) => void; data: Data
 }) {
   const [exp, setExp] = useState<Record<string, boolean>>({})
@@ -29,7 +32,13 @@ export function Sidebar({ docked, passed, onIntro, cloud, user, onOut, onAbout, 
   return (<>
     <div className={'sb-ov' + (open && !docked ? ' on' : '')} onClick={onClose} aria-hidden="true" />
     <aside className={'sb' + (open || docked ? ' on' : '') + (docked ? ' docked' : '')} aria-label="قايمة الفصول" inert={!open && !docked}>
-      <div className="sb-h"><b>المحتويات</b><span className="sb-p">{count}/{ORDER.length} مكتمل</span>{!docked && <button className="sb-x" onClick={onClose} aria-label="اقفل القايمة">×</button>}</div>
+      <div className="sb-prof">
+        <Av name={dname} s={40} p={{ avatar } as store.Person} />
+        <span className="sb-pn"><b>{dname}</b><small>{fmtN(pts)} نقطة{cloud ? ' · ☁️' : ''}</small></span>
+        <button className="sb-gear" onClick={onSettings} aria-label="الإعدادات" title="الإعدادات">⚙</button>
+        {!docked && <button className="sb-x" onClick={onClose} aria-label="اقفل القايمة">×</button>}
+      </div>
+      <div className="sb-h"><b>المحتويات</b><span className="sb-p">{count}/{ORDER.length} مكتمل</span></div>
       <nav className="sb-l">
         <button className="sb-home" onClick={onIntro}>🏠 صفحة البداية</button>
         {LEVELS.map((lv, li) => {
@@ -52,8 +61,6 @@ export function Sidebar({ docked, passed, onIntro, cloud, user, onOut, onAbout, 
             </div>)
         })}
       </nav>
-      <button className="sb-ab" onClick={() => { onClose(); onAbout() }}>ℹ️ عن الموقع (About me)</button>
-      <div className="sb-u"><span>👤 {user.name} · {user.job}</span>{cloud && <em>☁️ محفوظ على Claude</em>}</div>
       <button className="sb-out" onClick={onOut}>تسجيل خروج</button>
     </aside>
   </>)

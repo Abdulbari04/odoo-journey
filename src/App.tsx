@@ -12,6 +12,7 @@ import * as track from './track'
 import { Admin } from './Admin'
 import { Home } from './Home'
 import { CommunityPage, readProf } from './Community'
+import { Settings } from './Settings'
 import { calcPts, readPen, fmtN } from './points'
 import { Landing } from './Landing'
 import { SkipExam, Stepper, LevelExam, LockedCard, unlocked, type Passed } from './Levels'
@@ -44,8 +45,9 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const active = step.t === 'ch' ? step.k : LEVELS[step.li].ch[LEVELS[step.li].ch.length - 1]
   const [done, setDone] = useState<Record<string, boolean>>(() => { try { return JSON.parse(load('odoo20-done') || '{}') } catch { return {} } })
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'))
-  useEffect(() => { document.documentElement.dataset.theme = theme; save('odoo20-theme', theme) }, [theme])
-  const [view, setView] = useState<'intro' | 'course'>('intro')
+  useEffect(() => { document.documentElement.dataset.theme = theme; save('odoo20-theme', theme); try { localStorage.setItem('odoo20-theme', theme) } catch { /* ignore */ } }, [theme])
+  const [view, setView] = useState<'intro' | 'course'>(() => (load('odoo20-view') === 'course' && load('odoo20-started') === '1' ? 'course' : 'intro'))
+  useEffect(() => { save('odoo20-view', view) }, [view])
   const [passed, setPassed] = useState<Passed>(() => { try { return JSON.parse(load('odoo20-levels') || '{}') } catch { return {} } })
   const [started, setStarted] = useState(() => load('odoo20-started') === '1')
   const lockedK = (k: string) => !unlocked(levelIdx(k), passed)
@@ -59,6 +61,7 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
     return () => clearTimeout(t)
   }, [pts, modsN, lvlsN, user])
   const [srch, setSrch] = useState(false)
+  const [sett, setSett] = useState(false)
   const [comm, setCommS] = useState(() => location.hash === '#community')
   const setComm = (v: boolean) => { setCommS(v); if (v) location.hash = 'community'; else if (location.hash === '#community') history.replaceState(null, '', location.pathname + location.search) }
   useEffect(() => { const h = () => setCommS(location.hash === '#community'); addEventListener('hashchange', h); return () => removeEventListener('hashchange', h) }, [])
@@ -93,11 +96,12 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
 
   return (<>
     <Bg />
-    {course && <Sidebar docked={docked} cloud={store.getBackend() === 'claude'} user={user} onOut={outFn} onAbout={() => setAbout(true)} open={menu} onClose={() => setMenu(false)} active={active} done={done} passed={passed} onToggleDone={toggleDone} go={go} goSub={goSub} data={data} onIntro={() => { setView('intro'); setMenu(false) }} />}
+    {course && <Sidebar avatar={store.get('odoo20-avatar') || ''} dname={store.get('odoo20-dname') || user.name} pts={pts} onSettings={() => { setMenu(false); setSett(true) }} docked={docked} cloud={store.getBackend() === 'claude'} user={user} onOut={outFn} onAbout={() => setAbout(true)} open={menu} onClose={() => setMenu(false)} active={active} done={done} passed={passed} onToggleDone={toggleDone} go={go} goSub={goSub} data={data} onIntro={() => { setView('intro'); setMenu(false) }} />}
     {hello && <Welcome2 user={user} onClose={() => setHello(false)} />}
     {syncErr && <div className="syncerr" role="alert">⚠ مش قادر يحفظ على قاعدة البيانات دلوقتي، تقدّمك الأخير ممكن ما يتحفظش. <button onClick={() => setSyncErr('')}>×</button></div>}
     {tip}
     <Search open={srch} onClose={() => setSrch(false)} data={data} passed={passed} onPassAll={passAll} go={go} goSub={goSub} />
+    {sett && <Settings base={user} pts={pts} mods={modsN} lvls={lvlsN} theme={theme} onTheme={setTheme} onClose={() => setSett(false)} />}
     {about && <About onClose={() => setAbout(false)} />}
     {comm && <CommunityPage base={user} pts={pts} mods={modsN} lvls={lvlsN} current={course && step.t === 'ch' ? step.k : undefined} onClose={() => setComm(false)} />}
     <div className="bar">
@@ -108,7 +112,7 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
       <button className="modeb srchb" onClick={() => setSrch(true)} aria-label="بحث" title="بحث">🔍</button>
       <button className="modeb" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀' : '☾'}</button>
     </div>
-    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
+    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
     {course && <div className="layout focus">
       <main className="chaps">
         <Stepper li={step.li} cur={step.t === 'ch' ? step.k : 'exam'} done={done} passed={passed} onPick={id => (id === 'exam' ? goExam(step.li) : go(id))} />
@@ -130,7 +134,7 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
     <footer>
       <p>تفاصيل Odoo 20 مأخوذة من صفحات iVentureTeam لملاحظات الإصدار (كل صفحة بتقول إنها ملخّص لملاحظات أودو الرسمية، وأنا ما قدرتش أفتح صفحة أودو الرسمية للمقارنة). الفروق العامة من Versich. شرح المفاهيم والمسارات والأمثلة الرقمية تعليمي عام، وأسماء القوائم ممكن تختلف شوية في نسختك. القيود المحاسبية أمثلة مبسطة.</p>
       <p>مصادر عامة: {[['فهرس iVentureTeam', 'https://iventureteam.com/odoo-20-release-notes/'], ['وثائق Odoo (19.0)', 'https://www.odoo.com/documentation/19.0/applications/'], ['Webkul', 'https://webkul.com/blog/odoo-20-whats-new-key-features-and-comparison/'], ['Versich', 'https://versich.com/blog/odoo-19-to-20-upgrade-key-changes-and-testing-checklist/']].map(([t, u], i) => <span key={u}>{i ? ' · ' : ''}<a href={u} target="_blank" rel="noopener noreferrer" className="lnk">{t}</a></span>)}</p>
-          <p className="credit">تم الصنع بواسطة <b>Muhammed Abdul Bari</b> · النسخة <bdi dir="ltr">v{VERSION}</bdi> · <a href="#admin">لوحة الأدمن</a></p>
+          <p className="credit"><button className="ab-link" onClick={() => setAbout(true)}>ℹ️ عن الموقع</button> · تم الصنع بواسطة <b>Muhammed Abdul Bari</b> · النسخة <bdi dir="ltr">v{VERSION}</bdi> · <a href="#admin">لوحة الأدمن</a></p>
     </footer>
   </>)
 }
@@ -144,7 +148,7 @@ export default function App() {
   const [land, setLand] = useState(true)
   const [authMode, setAuthMode] = useState<'in' | 'up'>('in')
   const [theme0, setTheme0] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'))
-  useEffect(() => { document.documentElement.dataset.theme = theme0; save('odoo20-theme', theme0) }, [theme0])
+  useEffect(() => { document.documentElement.dataset.theme = theme0; save('odoo20-theme', theme0); try { localStorage.setItem('odoo20-theme', theme0) } catch { /* ignore */ } }, [theme0])
   const toggleTheme = () => setTheme0(t => (t === 'dark' ? 'light' : 'dark'))
   useEffect(() => {
     let off = false

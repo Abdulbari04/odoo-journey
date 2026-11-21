@@ -72,3 +72,53 @@ drop policy if exists "people update" on public.people;
 create policy "people read" on public.people for select to authenticated using (true);
 create policy "people insert" on public.people for insert to authenticated with check (auth.uid() = user_id);
 create policy "people update" on public.people for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ===== v5.2: ردود ومنشن وتفاعلات + مسابقات + كود دعوة (شغّله مرة، وتقدر تعيده بأمان) =====
+alter table public.comments add column if not exists reply_to text;
+alter table public.comments add column if not exists reply_name text;
+alter table public.people add column if not exists code text;
+alter table public.people add column if not exists inv text;
+alter table public.people add column if not exists cw int;
+alter table public.people add column if not exists cs int;
+alter table public.people add column if not exists cn int;
+
+create table if not exists public.reactions (
+  comment_id text not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  emoji text not null check (char_length(emoji) <= 8),
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id, emoji)
+);
+alter table public.reactions enable row level security;
+drop policy if exists "rx read" on public.reactions;
+drop policy if exists "rx insert" on public.reactions;
+drop policy if exists "rx update" on public.reactions;
+drop policy if exists "rx delete" on public.reactions;
+create policy "rx read" on public.reactions for select to authenticated using (true);
+create policy "rx insert" on public.reactions for insert to authenticated with check (auth.uid() = user_id);
+create policy "rx update" on public.reactions for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "rx delete" on public.reactions for delete to authenticated using (auth.uid() = user_id);
+
+-- ===== v5.3: فيديوهات الموديولات (شغّله مرة، وتقدر تعيده بأمان) =====
+create table if not exists public.videos (
+  module text primary key,
+  url text not null,
+  kind text not null default 'link',
+  updated_at timestamptz not null default now()
+);
+alter table public.videos enable row level security;
+drop policy if exists "videos read" on public.videos;
+drop policy if exists "videos admin write" on public.videos;
+create policy "videos read" on public.videos for select using (true);
+create policy "videos admin write" on public.videos for all to authenticated
+  using (exists (select 1 from public.admins a where a.user_id = auth.uid()))
+  with check (exists (select 1 from public.admins a where a.user_id = auth.uid()));
+
+-- مخزن ملفات الفيديو (عام للقراءة، والرفع للأدمن فقط)
+insert into storage.buckets (id, name, public) values ('videos', 'videos', true) on conflict (id) do nothing;
+drop policy if exists "videos files read" on storage.objects;
+drop policy if exists "videos files admin" on storage.objects;
+create policy "videos files read" on storage.objects for select using (bucket_id = 'videos');
+create policy "videos files admin" on storage.objects for all to authenticated
+  using (bucket_id = 'videos' and exists (select 1 from public.admins a where a.user_id = auth.uid()))
+  with check (bucket_id = 'videos' and exists (select 1 from public.admins a where a.user_id = auth.uid()));

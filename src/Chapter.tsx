@@ -1,3 +1,4 @@
+import { ModuleVideo } from './Video'
 import { ModuleComments } from './Community'
 import * as store from './store'
 import { Fragment, useEffect, useState } from 'react'
@@ -149,6 +150,7 @@ export function GuideChapter({ k, i, done, onFinish, onToggle, go, sub, who }: {
     <section className="ch" id={'ch-' + k} data-k={k} style={cv(k)}>
       <div className="kick">الموديول {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id} · صعوبة الموديول: {g.level}</div>
       <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{g.title || N[k]}</Ar></h2></div></div>
+      <ModuleVideo k={k} title={N[k]} icon={ICON[k]} idx={i} total={ORDER.length} lvl={LEVELS[levelIdx(k)].id} />
       {g.intro && <p className="intro"><Ar>{g.intro}</Ar></p>}
       <h3 id={sid(k, 'guide')}>الدليل التفصيلي</h3>
       <GuideView g={g} />
@@ -195,6 +197,7 @@ export function ChapterView({ k, i, data, done, onFinish, onToggle, go, sub, who
     <section className="ch" id={'ch-' + k} data-k={k} style={cv(k)}>
       <div className="kick">الموديول {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id}{GUIDES[k] ? ` · صعوبة الموديول: ${GUIDES[k].level}` : ''}</div>
       <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{c.t}</Ar></h2><div className="sub2">{c.en}</div></div></div>
+      <ModuleVideo k={k} title={N[k]} icon={ICON[k]} idx={i} total={ORDER.length} lvl={LEVELS[levelIdx(k)].id} />
       <p className="intro"><Ar>{c.intro}</Ar></p>
       <div className="cpanel">
       <Sec k={k} id="learn" n={nn('learn')} t="الفهم">
@@ -218,7 +221,7 @@ export function ChapterView({ k, i, data, done, onFinish, onToggle, go, sub, who
       </Sec>}
       <Sec k={k} id="more" n={nn('more')} t="اختبر نفسك">
         <h3 id={sid(k, 'quiz')}>اختبر نفسك</h3>
-        <div className="qz">{c.quiz.map((q, j) => <details key={j}><summary><Ar>{q[0]}</Ar></summary><p><Ar>{q[1]}</Ar></p></details>)}</div>
+        <div className="qz">{c.quiz.map((q, j) => <details key={j}><summary><span><Ar>{q[0]}</Ar></span></summary><p><Ar>{q[1]}</Ar></p></details>)}</div>
         <h3 id={sid(k, 'note')}>ملاحظاتي</h3>
         <Note k={k} />
         <h3 id={sid(k, 'src')}>المصادر</h3>

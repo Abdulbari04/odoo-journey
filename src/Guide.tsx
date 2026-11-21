@@ -33,7 +33,7 @@ export function GuideView({ g }: { g: Guide }) {
       <div className="gtabs" role="tablist">{tabs.map(([id, t]) => <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{t}</button>)}</div>
       <div className="gpane" role="tabpanel">
         {tab === 'topics' && <div className="gmenus">{g.topics!.map((t, i) => (
-          <details className="gm" key={t.t} open={i === 0}><summary><Ar>{t.t}</Ar></summary>
+          <details className="gm" key={t.t} open={i === 0}><summary><span><Ar>{t.t}</Ar></span></summary>
             <ul className="gmist">{t.points.map((p, j) => <li key={j}><Ar>{p}</Ar></li>)}</ul>
             {t.example && <p className="gex"><b>مثال: </b><Ar>{t.example}</Ar></p>}
           </details>))}</div>}
@@ -41,14 +41,14 @@ export function GuideView({ g }: { g: Guide }) {
         {tab === 'config' && <Rows heads={['الإعداد', 'بيعمل إيه', 'إمتى تفعّله']} rows={g.config} />}
         {tab === 'menus' && <div className="gmenus">{g.menus.map((m, i) => (
           <details className="gm" key={m.name} open={i === 0}>
-            <summary><Ar>{m.name}</Ar></summary>
+            <summary><span><Ar>{m.name}</Ar></span></summary>
             <p><Ar>{m.what}</Ar></p>
             {m.how && <ol className="steps">{m.how.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol>}
             {m.fields && m.fields.length > 0 && <Rows heads={['الخانة', 'معناها', 'إزاي تملاها']} rows={m.fields} />}
             {m.buttons && m.buttons.length > 0 && <Rows heads={['الزرار', 'بيعمل إيه']} rows={m.buttons} />}
           </details>))}</div>}
         {tab === 'howto' && <div className="gmenus">{g.howto.map((h, i) => (
-          <details className="gm" key={h.t} open={i === 0}><summary><Ar>{h.t}</Ar></summary><ol className="steps">{h.steps.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol></details>))}</div>}
+          <details className="gm" key={h.t} open={i === 0}><summary><span><Ar>{h.t}</Ar></span></summary><ol className="steps">{h.steps.map((s, j) => <li key={j}><span><Ar>{s}</Ar></span></li>)}</ol></details>))}</div>}
         {tab === 'reports' && <Rows heads={['التقرير', 'بيوريك إيه', 'بنستخدمه إمتى']} rows={g.reports} />}
         {tab === 'mistakes' && <ul className="gmist">{g.mistakes.map((m, i) => <li key={i}><Ar>{m}</Ar></li>)}</ul>}
       </div>
