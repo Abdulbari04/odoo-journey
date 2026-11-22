@@ -5,9 +5,9 @@ import { unlocked, type Passed } from './Levels'
 import { ILL } from './Stations'
 
 // الصفحة الرئيسية: كل الموديولات في كروت، وجنب كل واحد حالته (مكتمل / مفتوح / مغلق + اختبار دخول)
-export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, onSettings, pts, onTheme, theme, onOut }: {
+export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, onSettings, onMsg, onBell, nMsg, nBell, pts, onTheme, theme, onOut }: {
   name: string; passed: Passed; done: Record<string, boolean>; started: boolean; onStart: () => void; onModule: (k: string) => void
-  onSearch: () => void; onComm: () => void; onSettings: () => void; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void
+  onSearch: () => void; onComm: () => void; onSettings: () => void; onMsg: () => void; onBell: () => void; nMsg: number; nBell: number; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void
 }) {
   const doneN = ORDER.filter(k => done[k]).length, passN = Object.values(passed).filter(Boolean).length
   return (
@@ -15,6 +15,8 @@ export function Home({ name, passed, done, started, onStart, onModule, onSearch,
       <div className="ent-top hm-top">
         <div className="ent-logo"><b>O</b><span>خريطة أودو 20</span></div>
         <div className="ent-act">
+          <button onClick={onMsg} aria-label="الرسائل" title="الرسائل" className="nb">✉{nMsg > 0 && <i className="bdg">{nMsg}</i>}</button>
+          <button onClick={onBell} aria-label="الإشعارات" title="الإشعارات" className="nb">🔔{nBell > 0 && <i className="bdg">{nBell}</i>}</button>
           <button onClick={onComm}>👥 المجتمع</button>
           <button onClick={onSearch} aria-label="بحث">🔍</button>
           <button onClick={onSettings} aria-label="الإعدادات" title="الإعدادات">⚙</button>

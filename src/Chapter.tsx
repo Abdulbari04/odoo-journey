@@ -2,6 +2,7 @@ import { ModuleVideo } from './Video'
 import { ModuleComments } from './Community'
 import * as store from './store'
 import { Fragment, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CSSProperties, ReactNode } from 'react'
 import type { Data, Chg } from './types'
 import { ICON } from './icons'
@@ -143,21 +144,21 @@ function Pager({ k, done, onFinish, onToggle, go }: { k: string; done: boolean; 
     </div>)
 }
 
-export function GuideChapter({ k, i, done, onFinish, onToggle, go, sub, who }: { who: string; k: string; i: number; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void; sub: Sub }) {
+export function GuideChapter({ k, i, done, onFinish, onToggle, go, sub, who, side }: { who: string; side?: HTMLElement | null; k: string; i: number; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void; sub: Sub }) {
   const g = GUIDES[k]
-  useEffect(() => { if (sub && sub.k === k) setTimeout(() => document.getElementById(sub.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120) }, [sub, k])
+  useEffect(() => { if (sub && sub.k === k) setTimeout(() => document.getElementById(sub.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120) }, [sub, k, side])
   return (
     <section className="ch" id={'ch-' + k} data-k={k} style={cv(k)}>
       <div className="kick">الموديول {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id} · صعوبة الموديول: {g.level}</div>
       <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{g.title || N[k]}</Ar></h2></div></div>
       <ModuleVideo k={k} title={N[k]} icon={ICON[k]} idx={i} total={ORDER.length} lvl={LEVELS[levelIdx(k)].id} />
       {g.intro && <p className="intro"><Ar>{g.intro}</Ar></p>}
-      <h3 id={sid(k, 'guide')}>الدليل التفصيلي</h3>
-      <GuideView g={g} />
-      <h3 id={sid(k, 'note')}>ملاحظاتي</h3>
-      <Note k={k} />
-      <ModuleComments k={k} name={who} />
+      {inPanel(side, <div className="cpanel">
+        <Sec k={k} id="guide" n={1} t="الدليل التفصيلي"><h3 id={sid(k, 'guide')}>إزاي تشتغل على الموديول</h3><GuideView g={g} /></Sec>
+        <Sec k={k} id="more" n={2} t="ملاحظاتي"><h3 id={sid(k, 'note')}>ملاحظاتي</h3><Note k={k} /></Sec>
+      </div>)}
       <Pager k={k} done={done} onFinish={onFinish} onToggle={onToggle} go={go} />
+      <ModuleComments k={k} name={who} />
     </section>)
 }
 
@@ -180,26 +181,34 @@ function Je({ r }: { r: string[] }) {
     </blockquote>)
 }
 
+// side === undefined: عرض عادي داخل الصفحة. side === null: الجانب لسه مجهّز. element: يتعرض في اللوحة الجانبية الثابتة
+function inPanel(side: HTMLElement | null | undefined, node: ReactNode) { return side === undefined ? node : side ? createPortal(node, side) : null }
+
 function Sec({ k, id, n, t, children }: { k: string; id: string; n: number; t: string; children: ReactNode }) {
-  return <section className="csec" id={`sec-${k}-${id}`}><h2 className="sh"><i>{n}</i>{t}</h2>{children}</section>
+  return (
+    <details className="csec" id={`sec-${k}-${id}`}>
+      <summary><h2 className="sh"><i>{n}</i>{t}</h2><span className="chev" aria-hidden="true">▾</span></summary>
+      <div className="cbody">{children}</div>
+    </details>)
 }
 
-export function ChapterView({ k, i, data, done, onFinish, onToggle, go, sub, who }: { who: string; k: string; i: number; data: Data; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void; sub: Sub }) {
+export function ChapterView({ k, i, data, done, onFinish, onToggle, go, sub, who, side }: { who: string; side?: HTMLElement | null; k: string; i: number; data: Data; done: boolean; onFinish: () => void; onToggle: () => void; go: (k: string) => void; sub: Sub }) {
   const c = data.CORE[k]
   const links = MODS.includes(k) ? Object.values(E).filter(e => e.a === k || e.b === k) : []
   const tabs = [['learn', 'الفهم'], ...(GUIDES[k] ? [['guide', 'الدليل التفصيلي']] : []), ['acc', 'المحاسبة والربط'], ...(CHK[k] || c.up ? [['chg', 'Odoo 20 مقابل 19']] : []), ['more', 'اختبر نفسك']] as [string, string][]
   const nn = (id: string) => tabs.findIndex(t => t[0] === id) + 1
   useEffect(() => {
     if (!sub || sub.k !== k) return
-    const t = setTimeout(() => document.getElementById(sub.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); return () => clearTimeout(t)
-  }, [sub, k])
+    const el = document.getElementById(sub.id); el?.closest('details')?.setAttribute('open', '')
+    const t = setTimeout(() => document.getElementById(sub.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200); return () => clearTimeout(t)
+  }, [sub, k, side])
   return (
     <section className="ch" id={'ch-' + k} data-k={k} style={cv(k)}>
       <div className="kick">الموديول {i + 1} من {ORDER.length} · المستوى {LEVELS[levelIdx(k)].id}{GUIDES[k] ? ` · صعوبة الموديول: ${GUIDES[k].level}` : ''}</div>
       <div className="chead"><div className="ico">{ICON[k]}</div><div><h2><Ar>{c.t}</Ar></h2><div className="sub2">{c.en}</div></div></div>
       <ModuleVideo k={k} title={N[k]} icon={ICON[k]} idx={i} total={ORDER.length} lvl={LEVELS[levelIdx(k)].id} />
       <p className="intro"><Ar>{c.intro}</Ar></p>
-      <div className="cpanel">
+      {inPanel(side, <div className="cpanel">
       <Sec k={k} id="learn" n={nn('learn')} t="الفهم">
         <p className="ana"><Ar>{c.analogy}</Ar></p>
         <div id={sid(k, 'draw')}><Storyboard k={k} /></div>
@@ -227,9 +236,9 @@ export function ChapterView({ k, i, data, done, onFinish, onToggle, go, sub, who
         <h3 id={sid(k, 'src')}>المصادر</h3>
         <ul className="srcs">{c.src.map(s => <li key={s[1]}><a href={s[1]} target="_blank" rel="noopener noreferrer">{s[0]}</a></li>)}</ul>
       </Sec>
-      </div>
-      <ModuleComments k={k} name={who} />
+      </div>)}
       <Pager k={k} done={done} onFinish={onFinish} onToggle={onToggle} go={go} />
+      <ModuleComments k={k} name={who} />
     </section>)
 }
 void Fragment

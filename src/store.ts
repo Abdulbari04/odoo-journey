@@ -288,3 +288,34 @@ export async function videoUpload(k: string, file: File): Promise<string> {
   }
   throw new Error('nolocal')
 }
+
+// ---- رسائل مباشرة بين المستخدمين ----
+export type Msg = { id: string; from: string; fn: string; to: string; tn: string; text: string; t: number; mine: boolean }
+export const myUid = () => cloud?.uid || ''
+// الرسائل محتاجة مكان مشترك: صفحة Claude أو Supabase (على الجهاز المحلي مفيش حد تراسله)
+export const msgCapable = () => (backend === 'claude' && !!cloud && !!dbh) || (backend === 'sb' && !!sb && !!cloud)
+export async function msgList(): Promise<Msg[]> {
+  try {
+    const me = myUid()
+    if (backend === 'claude' && cloud && dbh) {
+      const snap = await dbh.collection('messages').get(); const out: Msg[] = []
+      for (const d of snap.docs) for (const x of (d.data().items || [])) if (d.id === me || x.to === me) out.push({ id: x.id, from: d.id, fn: x.fn || '', to: x.to, tn: x.tn || '', text: x.text, t: x.t, mine: d.id === me })
+      return out.sort((a, b) => a.t - b.t)
+    }
+    if (backend === 'sb' && sb && cloud) {
+      const r = await sb.from('messages').select('id,from_user,to_user,from_name,to_name,text,created_at').order('created_at', { ascending: true }).limit(800); if (r.error) throw r.error
+      return r.data.map((x: any) => ({ id: x.id, from: x.from_user, fn: x.from_name || '', to: x.to_user, tn: x.to_name || '', text: x.text, t: Date.parse(x.created_at), mine: x.from_user === me })) // eslint-disable-line @typescript-eslint/no-explicit-any
+    }
+  } catch { /* لو فشل نعرض صندوق فاضي */ }
+  return []
+}
+export async function msgSend(to: string, tn: string, fn: string, text: string): Promise<void> {
+  const t = text.trim().slice(0, 1000); if (!t) return
+  if (backend === 'claude' && cloud && dbh) {
+    const ref = dbh.doc('messages/' + cloud.uid); const snap = await ref.get()
+    const items = ((snap.exists ? snap.data().items : []) || []) as object[]
+    await ref.set({ items: [...items, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), to, tn, fn, text: t, t: Date.now() }].slice(-300) })
+  } else if (backend === 'sb' && sb && cloud) {
+    const r = await sb.from('messages').insert({ from_user: cloud.uid, to_user: to, from_name: fn, to_name: tn, text: t }); if (r.error) throw r.error
+  } else throw new Error('nomsg')
+}

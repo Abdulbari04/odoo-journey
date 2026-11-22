@@ -34,7 +34,7 @@ function useCmts() {
 }
 
 const EMO = ['👍', '❤️', '💡', '🎉']
-const mkey = (n: string) => n.trim().replace(/\s+/g, '_')
+export const mkey = (n: string) => n.trim().replace(/\s+/g, '_')
 const MENTION = /@[\w\u0600-\u06FF_]+/g
 
 function useRx() {
@@ -115,12 +115,21 @@ function Thread({ root, replies, t }: { root: store.Cmt; replies: store.Cmt[]; t
 }
 
 // تعليقات تحت كل موديول: تعليق واحد ظاهر + «إظهار المزيد»
-export function ModuleComments({ k, name }: { k: string; name: string }) {
+export function ModuleComments({ k, name, side }: { k: string; name: string; side?: boolean }) {
   const { all, refresh } = useCmts(); const { m: pm } = usePeople(); const { all: rxs, toggle } = useRx(); const [more, setMore] = useState(false); const [rep, setRep] = useState<Reply | null>(null)
   const list = (all || []).filter(c => c.k === k)
   const { roots, rs } = threads(list, all || [])
-  const shown = more ? roots : roots.slice(0, 1)
+  const shown = more || side ? roots : roots.slice(0, 1)
   const t: TProps = { all: all || [], pm, meName: name, rxs, toggle, rep, setRep, refresh }
+  if (side) return (
+    <section className="cm cm-p" aria-label="تعليقات الموديول">
+      <h4>💬 التعليقات{list.length ? ` (${list.length})` : ''}</h4>
+      <div className="cm-pl">
+        {all && !list.length && <p className="cm-empty">لا توجد تعليقات بعد. كن أول من يعلّق.</p>}
+        <ul>{shown.map(c => <Thread key={c.id} root={c} replies={rs.get(c.id) || []} t={t} />)}</ul>
+      </div>
+      <div className="cm-pc"><Composer k={k} name={name} onDone={refresh} people={Object.values(pm)} /></div>
+    </section>)
   return (
     <section className="cm" aria-label="تعليقات الموديول">
       <h4>تعليقات المجتمع{list.length ? ` (${list.length})` : ''}</h4>
@@ -195,6 +204,7 @@ function Board({ people, me }: { people: store.Person[] | null; me: string }) {
           <Av p={first} name={first.name} s={96} />
           <h3>{first.name || 'متعلّم'}{isMe(first) && <em> (أنت)</em>}</h3>
           <p className="lb-job">{first.job || rankOf(first.pts)}</p>
+          {!isMe(first) && <button className="lb-dm" onClick={() => dispatchEvent(new CustomEvent('odoo20-dm', { detail: { id: first.id, name: first.name } }))}>✉ راسله</button>}
           {first.bio && <p className="lb-bio">{first.bio}</p>}
           <div className="lb-st"><span><b>{first.mods}</b>موديول</span><span><b>{first.lvls}</b>مستوى</span><span><b>{rankOf(first.pts)}</b>الرتبة</span></div>
           <div className="lb-big"><b>{fmtN(first.pts)}</b><small>نقطة</small></div>
@@ -206,6 +216,7 @@ function Board({ people, me }: { people: store.Person[] | null; me: string }) {
               <Av p={x} name={x.name} s={38} />
               <span className="lb-w"><b>{x.name || 'متعلّم'}{isMe(x) && <em> (أنت)</em>}</b><small>{x.job || rankOf(x.pts)} · {x.mods} موديول · {x.lvls} مستوى</small></span>
               <span className="lb-p"><b>{fmtN(x.pts)}</b><small>نقطة</small></span>
+              {!isMe(x) && <button className="lb-dm s" aria-label={'مراسلة ' + x.name} title="راسله" onClick={() => dispatchEvent(new CustomEvent('odoo20-dm', { detail: { id: x.id, name: x.name } }))}>✉</button>}
             </li>))}
           {!rest.length && <li className="cm-empty">أنت أول المتصدرين حاليًا — بانتظار بقية المتعلّمين.</li>}
         </ol>

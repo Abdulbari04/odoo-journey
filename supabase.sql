@@ -122,3 +122,27 @@ create policy "videos files read" on storage.objects for select using (bucket_id
 create policy "videos files admin" on storage.objects for all to authenticated
   using (bucket_id = 'videos' and exists (select 1 from public.admins a where a.user_id = auth.uid()))
   with check (bucket_id = 'videos' and exists (select 1 from public.admins a where a.user_id = auth.uid()));
+
+-- ===== v5.4: رسائل مباشرة خاصة بين المستخدمين (شغّله مرة، وتقدر تعيده بأمان) =====
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  from_user uuid not null references auth.users(id) on delete cascade,
+  to_user uuid not null references auth.users(id) on delete cascade,
+  from_name text,
+  to_name text,
+  text text not null check (char_length(text) <= 1000),
+  created_at timestamptz not null default now()
+);
+create index if not exists messages_to_idx on public.messages (to_user, created_at);
+alter table public.messages enable row level security;
+drop policy if exists "msg read own" on public.messages;
+drop policy if exists "msg send" on public.messages;
+drop policy if exists "msg delete own" on public.messages;
+create policy "msg read own" on public.messages for select to authenticated using (auth.uid() = from_user or auth.uid() = to_user);
+create policy "msg send" on public.messages for insert to authenticated with check (auth.uid() = from_user);
+create policy "msg delete own" on public.messages for delete to authenticated using (auth.uid() = from_user);
+
+-- ===== ترقية حساب الأدمن (سجّل في الموقع بنفس الإيميل الأول، وبعدين شغّل ده) =====
+insert into public.admins
+select id from auth.users where email = 'mabary90@gmail.com'
+on conflict do nothing;

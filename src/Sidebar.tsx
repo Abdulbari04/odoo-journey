@@ -26,6 +26,8 @@ export function Sidebar({ avatar, dname, pts, onSettings, docked, passed, onIntr
 }) {
   const [exp, setExp] = useState<Record<string, boolean>>({})
   const isOpen = (k: string) => exp[k] ?? k === active
+  const [lx, setLx] = useState<Record<number, boolean>>({})
+  const lvOpen = (li: number) => lx[li] ?? (active ? levelIdx(active) === li : li === 0)
   const count = ORDER.filter(k => done[k]).length
   const narrow = () => !docked
   const lockedK = (k: string) => !unlocked(levelIdx(k), passed)
@@ -45,8 +47,12 @@ export function Sidebar({ avatar, dname, pts, onSettings, docked, passed, onIntr
           const lvLocked = !unlocked(li, passed)
           return (
             <div key={lv.id} className="sb-g">
-              <div className={'sb-lh' + (lvLocked ? ' is-lk' : '') + (passed[lv.id] ? ' ps' : '')}>{lvLocked ? '🔒' : passed[lv.id] ? '✓' : '▶'} المستوى {lv.id}: {lv.t}</div>
-              {lv.ch.map(k => {
+              <button className={'sb-lh' + (lvLocked ? ' is-lk' : '') + (passed[lv.id] ? ' ps' : '')} aria-expanded={lvOpen(li)} onClick={() => setLx(e => ({ ...e, [li]: !lvOpen(li) }))}>
+                <span className="sb-lt">{lvLocked ? '🔒' : passed[lv.id] ? '✓' : '▶'} المستوى {lv.id}: {lv.t}</span>
+                <span className="sb-lc">{lv.ch.filter(k => done[k]).length}/{lv.ch.length}</span>
+                <span className="chev" aria-hidden="true">{lvOpen(li) ? '▾' : '◂'}</span>
+              </button>
+              {lvOpen(li) && lv.ch.map(k => {
                 const i = ORDER.indexOf(k), lk = lvLocked, dn = !!done[k]
                 return (
                   <div key={k} className={'sb-c' + (active === k ? ' cur' : '') + (dn ? ' done' : '') + (lk ? ' is-lk' : '')} style={{ ['--c' as string]: `var(${COL[k]})` }}>

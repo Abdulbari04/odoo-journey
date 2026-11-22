@@ -1,4 +1,4 @@
-export const VERSION = '5.3.1'
+export const VERSION = '5.4.5'
 export function About({ onClose }: { onClose: () => void }) {
   return (
     <div className="ab-ov" onClick={onClose}>

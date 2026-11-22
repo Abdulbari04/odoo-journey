@@ -11,11 +11,12 @@ import { Search } from './Search'
 import * as track from './track'
 import { Admin } from './Admin'
 import { Home } from './Home'
-import { CommunityPage, readProf } from './Community'
+import { CommunityPage, readProf, ModuleComments } from './Community'
 import { Settings } from './Settings'
+import { useInbox, NotifPanel, Messages } from './Messages'
 import { calcPts, readPen, fmtN } from './points'
 import { Landing } from './Landing'
-import { SkipExam, Stepper, LevelExam, LockedCard, unlocked, type Passed } from './Levels'
+import { SkipExam, LevelExam, LockedCard, unlocked, type Passed } from './Levels'
 import * as store from './store'
 import { CloudSignup, SbAuth } from './Auth'
 import { ChapterView, GuideChapter, ORDER, N, type Sub } from './Chapter'
@@ -41,6 +42,9 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const desktop = useDesktop()
   const [page, setPage] = useState(() => { const v = Number(store.get('odoo20-page')); return Number.isInteger(v) && v >= 0 && v < STEPS.length ? v : 0 })
   const [sub, setSub] = useState<Sub>(null)
+  const [sideEl, setSideEl] = useState<HTMLElement | null>(null)
+  const [wide, setWide] = useState(() => matchMedia('(min-width:1400px)').matches)
+  useEffect(() => { const m = matchMedia('(min-width:1400px)'), f = () => setWide(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f) }, [])
   const step = STEPS[page]
   const active = step.t === 'ch' ? step.k : LEVELS[step.li].ch[LEVELS[step.li].ch.length - 1]
   const [done, setDone] = useState<Record<string, boolean>>(() => { try { return JSON.parse(load('odoo20-done') || '{}') } catch { return {} } })
@@ -62,6 +66,10 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   }, [pts, modsN, lvlsN, user])
   const [srch, setSrch] = useState(false)
   const [sett, setSett] = useState(false)
+  const dn = store.get('odoo20-dname') || user.name
+  const inbox = useInbox(dn)
+  const [bell, setBell] = useState(false); const [msgO, setMsgO] = useState<{ id: string; name: string } | 'list' | null>(null)
+  useEffect(() => { const h = (e: Event) => setMsgO((e as CustomEvent).detail); addEventListener('odoo20-dm', h); return () => removeEventListener('odoo20-dm', h) }, [])
   const [comm, setCommS] = useState(() => location.hash === '#community')
   const setComm = (v: boolean) => { setCommS(v); if (v) location.hash = 'community'; else if (location.hash === '#community') history.replaceState(null, '', location.pathname + location.search) }
   useEffect(() => { const h = () => setCommS(location.hash === '#community'); addEventListener('hashchange', h); return () => removeEventListener('hashchange', h) }, [])
@@ -102,20 +110,23 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
     {tip}
     <Search open={srch} onClose={() => setSrch(false)} data={data} passed={passed} onPassAll={passAll} go={go} goSub={goSub} />
     {sett && <Settings base={user} pts={pts} mods={modsN} lvls={lvlsN} theme={theme} onTheme={setTheme} onClose={() => setSett(false)} />}
+    {bell && <NotifPanel notifs={inbox.notifs} unread={inbox.unread} onClose={() => setBell(false)} onMarkAll={inbox.markAll} onOpen={n => { setBell(false); if (n.kind === 'msg' && n.peer) setMsgO(n.peer); else if (n.mod && ORDER.includes(n.mod)) go(n.mod); else setComm(true) }} />}
+    {msgO && <Messages myName={dn} msgs={inbox.msgs} peer0={msgO === 'list' ? undefined : msgO} onClose={() => setMsgO(null)} markPeer={inbox.markPeer} refresh={inbox.refresh} />}
     {about && <About onClose={() => setAbout(false)} />}
     {comm && <CommunityPage base={user} pts={pts} mods={modsN} lvls={lvlsN} current={course && step.t === 'ch' ? step.k : undefined} onClose={() => setComm(false)} />}
     <div className="bar">
       {course && <button className="menub" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-label="قايمة الفصول" title="قايمة الفصول">☰</button>}
       <button className="brand brandb" onClick={() => { setView('intro'); scrollTo({ top: 0 }) }} title="صفحة البداية">خريطة أودو 20</button>
       <span className="prog" aria-live="polite">{ORDER.filter(k => done[k]).length}/{ORDER.length}</span>
+      <button className="modeb nbtn" onClick={() => setMsgO('list')} aria-label="الرسائل" title="الرسائل">✉{inbox.unreadMsgs > 0 && <i className="bdg">{inbox.unreadMsgs}</i>}</button>
+      <button className="modeb nbtn" onClick={() => setBell(true)} aria-label="الإشعارات" title="الإشعارات">🔔{inbox.unread > 0 && <i className="bdg">{inbox.unread}</i>}</button>
       <button className="modeb commb" onClick={() => setComm(true)} aria-label="المجتمع" title="المجتمع">👥 <span>المجتمع</span></button>
       <button className="modeb srchb" onClick={() => setSrch(true)} aria-label="بحث" title="بحث">🔍</button>
       <button className="modeb" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀' : '☾'}</button>
     </div>
-    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
+    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} onMsg={() => setMsgO('list')} onBell={() => setBell(true)} nMsg={inbox.unreadMsgs} nBell={inbox.unread} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
     {course && <div className="layout focus">
       <main className="chaps">
-        <Stepper li={step.li} cur={step.t === 'ch' ? step.k : 'exam'} done={done} passed={passed} onPick={id => (id === 'exam' ? goExam(step.li) : go(id))} />
         {(() => {
           const li = step.li, lv = LEVELS[li], open = unlocked(li, passed)
           if (step.t === 'ch') {
@@ -123,13 +134,14 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
             if (!open) return <><LockedCard k={k} lv={lv} /><SkipExam li={li} passed={passed} onPassAll={passAll} /></>
             const i = ORDER.indexOf(k)
             return !data.CORE[k]
-              ? <GuideChapter who={user.name} key={k} k={k} i={i} done={!!done[k]} onFinish={() => finish(k)} onToggle={() => toggleDone(k)} go={go} sub={sub} />
-              : <ChapterView who={user.name} key={k} k={k} i={i} data={data} done={!!done[k]} onFinish={() => finish(k)} onToggle={() => toggleDone(k)} go={go} sub={sub} />
+              ? <GuideChapter side={wide ? sideEl : undefined} who={user.name} key={k} k={k} i={i} done={!!done[k]} onFinish={() => finish(k)} onToggle={() => toggleDone(k)} go={go} sub={sub} />
+              : <ChapterView side={wide ? sideEl : undefined} who={user.name} key={k} k={k} i={i} data={data} done={!!done[k]} onFinish={() => finish(k)} onToggle={() => toggleDone(k)} go={go} sub={sub} />
           }
           if (!open) return <><section className="ch locked"><div className="lock-i" aria-hidden="true">🔒</div><h2>اختبار المستوى {lv.id}</h2><p>المستوى ده مقفول. اختبر نفسك في اللي قبله الأول وهيتفتح لك.</p></section><SkipExam li={li} passed={passed} onPassAll={passAll} /></>
           return <LevelExam lv={lv} passed={!!passed[lv.id]} onPass={() => passLevel(lv.id)} onNext={LEVELS[li + 1] ? () => goLevel(li + 1) : null} onBack={() => go(lv.ch[lv.ch.length - 1])} />
         })()}
       </main>
+      {step.t === 'ch' && unlocked(step.li, passed) && <aside className="cm-side" ref={setSideEl} />}
     </div>}
     <footer>
       <p>تفاصيل Odoo 20 مأخوذة من صفحات iVentureTeam لملاحظات الإصدار (كل صفحة بتقول إنها ملخّص لملاحظات أودو الرسمية، وأنا ما قدرتش أفتح صفحة أودو الرسمية للمقارنة). الفروق العامة من Versich. شرح المفاهيم والمسارات والأمثلة الرقمية تعليمي عام، وأسماء القوائم ممكن تختلف شوية في نسختك. القيود المحاسبية أمثلة مبسطة.</p>
