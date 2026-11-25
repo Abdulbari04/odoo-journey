@@ -56,6 +56,20 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const [started, setStarted] = useState(() => load('odoo20-started') === '1')
   const lockedK = (k: string) => !unlocked(levelIdx(k), passed)
   const [about, setAbout] = useState(false)
+  const [bm, setBm] = useState(false)
+  useEffect(() => { if (!bm) return; const f = (e: Event) => { if (!(e.target as Element).closest?.('.bar-act, .bar-more')) setBm(false) }; addEventListener('pointerdown', f); return () => removeEventListener('pointerdown', f) }, [bm])
+  useEffect(() => {
+    let last = 0, lastEl: EventTarget | null = null
+    const f = (e: Event) => {
+      const t = e.target as Element | Document, y = t instanceof Document ? (document.scrollingElement?.scrollTop ?? 0) : (t as Element).scrollTop ?? 0
+      if (t !== lastEl) { lastEl = t; last = y; return }
+      const d = y - last
+      if (Math.abs(d) < 8) return
+      document.documentElement.classList.toggle('nav-hide', d > 0 && y > 70)
+      last = y
+    }
+    addEventListener('scroll', f, { capture: true, passive: true }); return () => removeEventListener('scroll', f, true)
+  }, [])
   const [penV, setPenV] = useState(0)
   useEffect(() => { const h = () => setPenV(v => v + 1); addEventListener('odoo20-pen', h); return () => removeEventListener('odoo20-pen', h) }, [])
   const modsN = ORDER.filter(k => done[k]).length, lvlsN = Object.values(passed).filter(Boolean).length
@@ -116,15 +130,18 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
     {comm && <CommunityPage base={user} pts={pts} mods={modsN} lvls={lvlsN} current={course && step.t === 'ch' ? step.k : undefined} onClose={() => setComm(false)} />}
     <div className="bar">
       {course && <button className="menub" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-label="قايمة الفصول" title="قايمة الفصول">☰</button>}
-      <button className="brand brandb" onClick={() => { setView('intro'); scrollTo({ top: 0 }) }} title="صفحة البداية">خريطة أودو 20</button>
+      <button className="brand brandb" onClick={() => { setComm(false); setMenu(false); setView('intro'); scrollTo({ top: 0 }) }} title="صفحة البداية">خريطة أودو 20</button>
       <span className="prog" aria-live="polite">{ORDER.filter(k => done[k]).length}/{ORDER.length}</span>
+      <button className="bar-more" onClick={() => setBm(v => !v)} aria-expanded={bm} aria-label="القائمة" title="القائمة">{bm ? '✕' : '⋯'}</button>
+      <div className={'bar-act' + (bm ? ' open' : '')} onClick={() => setBm(false)}>
       <button className="modeb nbtn" onClick={() => setMsgO('list')} aria-label="الرسائل" title="الرسائل">✉{inbox.unreadMsgs > 0 && <i className="bdg">{inbox.unreadMsgs}</i>}</button>
       <button className="modeb nbtn" onClick={() => setBell(true)} aria-label="الإشعارات" title="الإشعارات">🔔{inbox.unread > 0 && <i className="bdg">{inbox.unread}</i>}</button>
       <button className="modeb commb" onClick={() => setComm(true)} aria-label="المجتمع" title="المجتمع">👥 <span>المجتمع</span></button>
       <button className="modeb srchb" onClick={() => setSrch(true)} aria-label="بحث" title="بحث">🔍</button>
       <button className="modeb" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀' : '☾'}</button>
+      </div>
     </div>
-    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} onMsg={() => setMsgO('list')} onBell={() => setBell(true)} nMsg={inbox.unreadMsgs} nBell={inbox.unread} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} />}
+    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} onMsg={() => setMsgO('list')} onBell={() => setBell(true)} nMsg={inbox.unreadMsgs} nBell={inbox.unread} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} onAbout={() => setAbout(true)} />}
     {course && <div className="layout focus">
       <main className="chaps">
         {(() => {

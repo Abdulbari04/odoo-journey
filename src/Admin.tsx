@@ -31,7 +31,7 @@ function VideoRow({ k, v, onChanged }: { k: string; v?: store.Vid; onChanged: ()
   return (
     <li className="vd-r">
       <div className="vd-t"><b>{N[k]}</b><span className={'vd-s' + (v ? ' on' : '')}>{v ? (v.kind === 'file' ? '🎞 ملف مرفوع' : '🔗 لينك') : 'البوستر الافتراضي'}</span></div>
-      <div className="vd-f"><input dir="ltr" value={u} onChange={e => setU(e.target.value)} placeholder="لينك يوتيوب / Vimeo / Google Drive / mp4" aria-label={'لينك فيديو ' + N[k]} /><button disabled={busy} onClick={saveLink}>حفظ اللينك</button></div>
+      <div className="vd-f"><input dir="ltr" value={u} onChange={e => setU(e.target.value)} placeholder="لينك يوتيوب / Vimeo / Google Drive / mp4" aria-label={'لينك فيديو ' + (N[k] || k)} /><button disabled={busy} onClick={saveLink}>حفظ اللينك</button></div>
       <div className="vd-f">
         <label className={'vd-up' + (!can || busy ? ' off' : '')}>⬆ رفع ملف فيديو<input type="file" accept="video/*" hidden disabled={!can || busy} onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }} /></label>
         {v && <button className="vd-x" disabled={busy} onClick={() => void run(() => store.videoSet(k, null), 'رجع البوستر الافتراضي ✓')}>إزالة الفيديو</button>}

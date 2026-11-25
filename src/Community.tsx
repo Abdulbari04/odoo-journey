@@ -11,7 +11,8 @@ const ago = (t: number) => {
   const h = Math.round(m / 60); if (h < 24) return `منذ ${h} س`
   const d = Math.round(h / 24); return d < 30 ? `منذ ${d} يوم` : new Date(t).toLocaleDateString('ar-EG')
 }
-const label = (k: string) => (k === 'general' ? 'عام' : N[k] || k)
+export const TOPICS: [string, string, string][] = [['general', '💬', 'عام'], ['version', '🆕', 'النسخة: Odoo 20 مقابل 19'], ['bugs', '🐞', 'أخطاء ومشاكل'], ['acc', '🧾', 'أسئلة المحاسبة'], ['exams', '📝', 'الاختبارات والنقاط'], ['ideas', '💡', 'اقتراحات وتحسينات']]
+const label = (k: string) => TOPICS.find(t => t[0] === k)?.[2] || N[k] || k
 
 export { rankOf }
 
@@ -226,17 +227,32 @@ function Board({ people, me }: { people: store.Person[] | null; me: string }) {
 }
 
 function Feed({ name, current, pm }: { name: string; current?: string; pm: Record<string, store.Person> }) {
-  const { all, refresh } = useCmts(); const { all: rxs, toggle } = useRx(); const [f, setF] = useState('all'); const [n, setN] = useState(5); const [rep, setRep] = useState<Reply | null>(null)
-  const list = (all || []).filter(c => f === 'all' || c.k === f)
+  const { all, refresh } = useCmts(); const { all: rxs, toggle } = useRx(); const [topic, setTopic] = useState(current && ORDER.includes(current) ? current : 'general'); const [n, setN] = useState(10); const [rep, setRep] = useState<Reply | null>(null)
+  const cnt = (k: string) => (all || []).filter(c => c.k === k && !c.rep).length
+  const list = (all || []).filter(c => c.k === topic)
   const { roots, rs } = threads(list, all || [])
-  const t: TProps = { all: all || [], pm, meName: name, rxs, toggle, rep, setRep, refresh, tag: true }
+  const t: TProps = { all: all || [], pm, meName: name, rxs, toggle, rep, setRep, refresh }
+  const pick = (k: string) => { setTopic(k); setN(10); setRep(null) }
+  const Btn = ({ k, ic, t: tt }: { k: string; ic: string; t: string }) => <button className={'tp-b' + (topic === k ? ' on' : '')} aria-pressed={topic === k} onClick={() => pick(k)}><i aria-hidden="true">{ic}</i><span>{tt}</span>{cnt(k) > 0 && <em>{cnt(k)}</em>}</button>
   return (
-    <div className="cm-feed">
-      <Composer k={current && ORDER.includes(current) ? current : 'general'} name={name} onDone={refresh} picker people={Object.values(pm)} />
-      <select className="cm-f" aria-label="تصفية" value={f} onChange={e => { setF(e.target.value); setN(5) }}><option value="all">كل التعليقات</option><option value="general">عام</option>{ORDER.map(o => <option key={o} value={o}>{N[o]}</option>)}</select>
-      {all && !list.length && <p className="cm-empty">لا توجد تعليقات.</p>}
-      <ul>{roots.slice(0, n).map(c => <Thread key={c.id} root={c} replies={rs.get(c.id) || []} t={t} />)}</ul>
-      {roots.length > n && <button className="cm-more" onClick={() => setN(x => x + 10)}>إظهار المزيد ({roots.length - n})</button>}
+    <div className="dsc">
+      <aside className="dsc-topics" aria-label="موضوعات النقاش">
+        <h3>موضوعات النقاش</h3>
+        <select className="cm-f dsc-sel" aria-label="اختر الموضوع" value={topic} onChange={e => pick(e.target.value)}>
+          <optgroup label="موضوعات عامة">{TOPICS.map(x => <option key={x[0]} value={x[0]}>{x[1]} {x[2]}</option>)}</optgroup>
+          <optgroup label="الموديولات">{ORDER.map(o => <option key={o} value={o}>{N[o]}</option>)}</optgroup>
+        </select>
+        <div className="tp-g">{TOPICS.map(x => <Btn key={x[0]} k={x[0]} ic={x[1]} t={x[2]} />)}</div>
+        <h4>الموديولات</h4>
+        <div className="tp-g">{ORDER.map(o => <Btn key={o} k={o} ic="📦" t={N[o]} />)}</div>
+      </aside>
+      <section className="dsc-main cm-feed" aria-label={'مناقشة: ' + label(topic)}>
+        <h3 className="dsc-h">{label(topic)}<small>{roots.length ? `${roots.length} نقاش` : ''}</small></h3>
+        <Composer key={topic} k={topic} name={name} onDone={refresh} people={Object.values(pm)} />
+        {all && !list.length && <p className="cm-empty">لا توجد مناقشات في الموضوع ده لسه. ابدأ أول واحدة.</p>}
+        <ul>{roots.slice(0, n).map(c => <Thread key={c.id} root={c} replies={rs.get(c.id) || []} t={t} />)}</ul>
+        {roots.length > n && <button className="cm-more" onClick={() => setN(x => x + 10)}>إظهار المزيد ({roots.length - n})</button>}
+      </section>
     </div>)
 }
 
@@ -287,7 +303,7 @@ function Contest({ people, me, onDone }: { people: store.Person[] | null; me: st
     </div>)
 }
 
-// صفحة المجتمع المستقلة: المتصدرون، التعليقات، ملفي
+// صفحة المجتمع المستقلة: المتصدرون، المسابقات، المناقشات
 export function CommunityPage({ base, pts, mods, lvls, current, onClose }: { base: { name: string; job: string }; pts: number; mods: number; lvls: number; current?: string; onClose: () => void }) {
   const [tab, setTab] = useState<'lb' | 'ct' | 'feed'>('lb')
   const { m, all, refresh } = usePeople()
@@ -301,9 +317,9 @@ export function CommunityPage({ base, pts, mods, lvls, current, onClose }: { bas
         <h1 className="cmp-t">المجتمع</h1>
         <span className="cmp-pts"><b>{fmtN(pts)}</b> نقطة</span>
       </header>
-      <main className="cmp-main">
+      <main className={'cmp-main' + (tab === 'feed' ? ' wide' : '')}>
         <nav className="cmp-tabs" role="tablist" aria-label="أقسام المجتمع">
-          {([['lb', 'المتصدرون'], ['ct', 'المسابقات'], ['feed', 'التعليقات']] as const).map(([id, t]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t}</button>)}
+          {([['lb', 'المتصدرون'], ['ct', 'المسابقات'], ['feed', 'المناقشات']] as const).map(([id, t]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t}</button>)}
         </nav>
         <p className="cm-note">{store.cmtShared() ? 'مساحة مشتركة بين المتعلّمين لتبادل الأسئلة والملاحظات ومتابعة الترتيب.' : 'أنت تستخدم الموقع بدون قاعدة بيانات مشتركة، لذلك تظهر بياناتك هنا لك وحدك.'}</p>
         {tab === 'lb' && <Board people={all} me={meId} />}

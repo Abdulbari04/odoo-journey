@@ -15,7 +15,7 @@ export function embedOf(u: string): string | null {
 const isFile = (u: string) => /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u)
 
 // بوستر افتراضي بمقاس الفيديو 16:9 لحد ما الأدمن يرفع الفيديو
-function Poster({ title, icon, idx, total, lvl }: { title: string; icon: ReactNode; idx: number; total: number; lvl: number }) {
+function Poster({ title, icon, idx, total, lvl, kick, foot }: { title: string; icon: ReactNode; idx: number; total: number; lvl: number; kick?: string; foot?: string }) {
   return (
     <div className="vp" role="img" aria-label={`بوستر فيديو شرح موديول ${title}`}>
       <svg className="vp-bg" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -25,9 +25,9 @@ function Poster({ title, icon, idx, total, lvl }: { title: string; icon: ReactNo
         <path d="M0 70 Q40 52 80 66 T160 56 V90 H0Z" fill="currentColor" opacity=".13" />
       </svg>
       <div className="vp-in">
-        <span className="vp-k">🎬 فيديو شرح الموديول</span>
+        <span className="vp-k">{kick || '🎬 فيديو شرح الموديول'}</span>
         <div className="vp-m"><span className="vp-i">{icon}</span><h3>{title}</h3></div>
-        <span className="vp-f">الموديول {idx + 1} من {total} · المستوى {lvl}</span>
+        <span className="vp-f">{foot || `الموديول ${idx + 1} من ${total} · المستوى ${lvl}`}</span>
       </div>
       <span className="vp-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
       <span className="vp-soon">الفيديو قريبًا</span>
@@ -50,3 +50,4 @@ export function ModuleVideo({ k, title, icon, idx, total, lvl }: { k: string; ti
       {(emb || (!isFile(v.url) && v.kind === 'link')) && <figcaption><a href={v.url} target="_blank" rel="noopener noreferrer">فتح الفيديو في صفحة جديدة ↗</a></figcaption>}
     </figure>)
 }
+
