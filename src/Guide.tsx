@@ -10,7 +10,7 @@ export type Guide = {
   mistakes: string[]
   src: [string, string][]
 }
-const TABS = [['topics', 'مفاهيم وأمثلة'], ['install', 'التثبيت'], ['config', 'الإعدادات'], ['menus', 'القوائم والخانات'], ['howto', 'إزاي نعمل'], ['reports', 'التقارير'], ['mistakes', 'أخطاء شائعة']] as const
+const TABS = [['topics', 'مفاهيم وأمثلة'], ['install', 'التثبيت'], ['menus', 'القوائم والخانات'], ['howto', 'إزاي نعمل'], ['config', 'الإعدادات'], ['reports', 'التقارير'], ['mistakes', 'أخطاء شائعة']] as const
 type Tab = typeof TABS[number][0]
 
 function Rows({ rows, heads }: { rows: string[][]; heads: string[] }) {
@@ -38,7 +38,11 @@ export function GuideView({ g }: { g: Guide }) {
             {t.example && <p className="gex"><b>مثال: </b><Ar>{t.example}</Ar></p>}
           </details>))}</div>}
         {tab === 'install' && <ol className="steps">{g.install.map((s, i) => <li key={i}><span><Ar>{s}</Ar></span></li>)}</ol>}
-        {tab === 'config' && <Rows heads={['الإعداد', 'بيعمل إيه', 'إمتى تفعّله']} rows={g.config} />}
+        {tab === 'config' && (g.config.length > 10
+          ? <><p className="gnote2">ابدأ بالإعدادات الأولى في الجدول، وارجع لباقي الإعدادات لما تحتاجها.</p>
+            <Rows heads={['الإعداد', 'بيعمل إيه', 'إمتى تفعّله']} rows={g.config.slice(0, 8)} />
+            <details className="gm"><summary><span>باقي الإعدادات ({g.config.length - 8})</span></summary><Rows heads={['الإعداد', 'بيعمل إيه', 'إمتى تفعّله']} rows={g.config.slice(8)} /></details></>
+          : <Rows heads={['الإعداد', 'بيعمل إيه', 'إمتى تفعّله']} rows={g.config} />)}
         {tab === 'menus' && <div className="gmenus">{g.menus.map((m, i) => (
           <details className="gm" key={m.name} open={i === 0}>
             <summary><span><Ar>{m.name}</Ar></span></summary>

@@ -6,3 +6,4 @@ try {
   document.documentElement.dataset.theme = t === 'dark' ? 'dark' : 'light'
 } catch { document.documentElement.dataset.theme = 'light' }
 createRoot(document.getElementById('root')!).render(<App />)
+try { if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}) }) } catch { /* ignore */ }

@@ -1173,8 +1173,6 @@ html::-webkit-scrollbar{width:4px}
 .hm2-pill{border:1px solid var(--line)}
 .bar,.hm-top,.ld-top{background:var(--bg)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;transition:transform .25s ease}
 html.nav-hide .bar,html.nav-hide .hm-top,html.nav-hide .ld-top{transform:translateY(-110%)}
-html.nav-hide .sb{top:env(safe-area-inset-top,0px)}
-.sb{transition:transform .25s ease,top .25s ease}
 .bar-act{display:contents}.bar-more,.hm-more{display:none}
 @media (max-width:700px){
   .bar-more,.hm-more{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--text);font:inherit;font-size:16px;cursor:pointer;flex:0 0 auto;margin-inline-start:auto}
@@ -1216,3 +1214,67 @@ html.nav-hide .sb{top:env(safe-area-inset-top,0px)}
   .hm2-t{width:auto!important}
   .hm2-st{gap:8px;margin-top:40px}.hm2-sc{padding:14px 4px}.hm2-sc span{font-size:11.5px}
 }
+
+/* v5.9.1 تحديد بقلم ماركر فعلي */
+.hm2-hero mark{background:none!important;position:relative;display:inline-block;padding:0 .3em;isolation:isolate;border-radius:0}
+.hm2-hero mark::before{content:"";position:absolute;z-index:-1;inset:16% -3% -2% -3%;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 60' preserveAspectRatio='none'><path d='M5 16 C 30 8, 70 14, 120 9 S 230 12, 294 5 L 297 20 C 292 31, 299 43, 289 55 C 240 49, 180 57, 125 51 S 45 55, 9 53 C 14 42, 1 29, 5 16 Z' fill='%23FFD93B'/><path d='M12 24 C 80 20, 200 26, 288 20' stroke='%23FFE98A' stroke-width='3' fill='none' opacity='.6'/></svg>") center/100% 100% no-repeat;transform:rotate(-1.4deg);opacity:.92;mix-blend-mode:multiply}
+:root[data-theme="dark"] .hm2-hero mark::before{mix-blend-mode:normal;opacity:.5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .hm2-hero mark::before{mix-blend-mode:normal;opacity:.5}}
+/* v5.9.2 إصلاح اللاج: بدون blend-mode ولا تحريك للشريط الجانبي أثناء السكرول */
+.hm2-hero mark{isolation:auto}
+.hm2-hero mark::before{mix-blend-mode:normal!important;opacity:.95}
+:root[data-theme="dark"] .hm2-hero mark::before{opacity:.5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .hm2-hero mark::before{opacity:.5}}
+.hm-top,.bar{will-change:transform}
+/* v5.9.3 لا فراغ فوق القايمة الجانبية عند اختفاء الشريط */
+.sb:not(.docked){top:env(safe-area-inset-top,0px)}
+html.nav-hide .sb.docked{top:env(safe-area-inset-top,0px)}
+/* v5.9.4 القايمة المفتوحة فوق كل شيء + قفل سكرول الصفحة الخلفية */
+.sb:not(.docked){z-index:41}
+.sb-ov{z-index:40}
+html.sb-lock,html.sb-lock body{overflow:hidden!important;overscroll-behavior:none}
+.sb-ov{touch-action:none}
+.sb-l{overscroll-behavior:contain}
+.sb{overscroll-behavior:contain}
+.ld-wait{display:grid;place-items:center;min-height:60vh;font-weight:700;color:var(--muted)}
+.ms-warn{background:color-mix(in srgb,#f7b733 18%,transparent);border:1px solid color-mix(in srgb,#f7b733 55%,transparent);border-radius:10px;padding:8px 10px}
+
+/* v6.0 */
+.hm2-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:22px}
+.hm2-tool{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:start;padding:14px 16px;border:1px solid var(--bd,#e5e1da);border-radius:14px;background:var(--card,#fff);color:inherit;font:inherit;cursor:pointer}
+.hm2-tool i{font-style:normal;font-size:24px}.hm2-tool b{font-weight:800}.hm2-tool span{font-size:.82rem;opacity:.7}
+.hm2-tool.on{border-color:#f2a93b;box-shadow:0 0 0 2px #f2a93b33}
+@media(max-width:480px){.hm2-tools{grid-template-columns:1fr}}
+.cert-box,.pr-box{position:relative;background:var(--card,#fff);color:inherit;border-radius:18px;padding:22px;max-width:min(720px,94vw);max-height:90vh;overflow:auto;width:100%}
+.cert-x{position:absolute;inset-block-start:10px;inset-inline-end:12px;border:0;background:none;font-size:20px;cursor:pointer;color:inherit}
+.cert-img{width:100%;height:auto;border-radius:10px;border:1px solid #0002;margin:10px 0}
+.cert-a{display:flex;flex-direction:column;gap:8px;align-items:center}.cert-a small{opacity:.7}
+.cert-p{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0}
+.cert-bar{height:10px;background:#0001;border-radius:9px;overflow:hidden}.cert-bar i{display:block;height:100%;background:#a31f1f}
+.pr-box header{display:flex;justify-content:space-between;align-items:center}.pr-box h2{margin:0}
+.pr-n{font-size:.85rem;opacity:.7}.pr-f{display:flex;gap:8px;align-items:center;margin:8px 0}.pr-f select{flex:1;min-width:0;padding:6px;border-radius:8px}
+.pr-p{font-size:.85rem;opacity:.7}.pr-q{margin:8px 0}
+.pr-o{display:grid;gap:8px;margin:10px 0}
+.pr-b{text-align:start;padding:10px 12px;border:1px solid #0003;border-radius:10px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.pr-b.ok{background:#1f8a4c33;border-color:#1f8a4c}.pr-b.bad{background:#c0392b33;border-color:#c0392b}
+.pr-w{margin:8px 0}.pr-r{text-align:center;padding:16px}.pr-r b{font-size:2.4rem}
+.adm-bars{display:grid;gap:6px;margin:8px 0 16px}.adm-bar{display:grid;grid-template-columns:20px 1fr 30px;gap:8px;align-items:center}.adm-bar i{display:block;height:14px;background:#a31f1f;border-radius:7px;min-width:2px}
+
+/* v6.0.1: شريط العنوان = رسائل + إشعارات + مجتمع، والباقي في قائمة */
+.bar,.hm-top{position:sticky}
+.tq{display:flex;gap:6px;align-items:center;margin-inline-start:auto;flex:0 0 auto}
+.tq button{position:relative;font:inherit;font-weight:700;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:99px;padding:4px 12px;min-height:34px;min-width:34px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.tq button:hover{border-color:var(--acc);color:var(--acc)}
+.tq .bdg{position:absolute;top:-5px;inset-inline-start:-5px}
+.tq .mn-t{padding:0;width:34px;border-radius:50%}
+.mn{display:none;position:absolute;top:calc(100% + 6px);inset-inline-end:12px;z-index:45;flex-direction:column;gap:4px;min-width:190px;padding:8px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.35)}
+.mn.open{display:flex}
+.mn button{font:inherit;font-weight:700;font-size:14px;text-align:start;border:0;background:transparent;color:var(--text);border-radius:10px;padding:9px 12px;cursor:pointer}
+.mn button:hover{background:var(--surface2)}
+@media(max-width:560px){.tq button span{display:none}.tq{gap:5px}}
+/* بطاقات الأدوات في الرئيسية: ألوان الثيم بدل الأبيض */
+.hm2-tool{background:var(--surface)!important;border:1px solid var(--line)!important;color:var(--text)!important}
+.hm2-tool span{color:var(--muted);opacity:1}
+.cert-box,.pr-box{background:var(--surface);color:var(--text)}
+.pr-f select{background:var(--bg);color:var(--text);border:1px solid var(--line)}
+.gnote2{font-size:.85rem;color:var(--muted);margin:4px 0 8px}

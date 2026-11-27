@@ -8,8 +8,10 @@ import type { Data, Chg } from './types'
 import { ICON } from './icons'
 import { Storyboard } from './Toon'
 import { GuideView, type Guide } from './Guide'
-import guidesRaw from './guides.json'
-export const GUIDES = guidesRaw as unknown as Record<string, Guide>
+// الأدلة التفصيلية ملف كبير (1.3MB)، فبتتحمّل في الخلفية بعد ظهور الصفحة الأولى
+export const GUIDES: Record<string, Guide> = {}
+let gp: Promise<void> | null = null
+export const loadGuides = (): Promise<void> => (gp ||= import('./guides.json').then(m => { Object.assign(GUIDES, (m as { default: unknown }).default as Record<string, Guide>) }))
 import { LORDER, LEVELS, levelIdx } from './levels'
 
 export const MODS = ['crm', 's', 'i', 'p', 'm', 'pos', 'a', 'con', 'ai', 'rec', 'emp', 'att', 'to', 'pay']
@@ -186,7 +188,7 @@ function inPanel(side: HTMLElement | null | undefined, node: ReactNode) { return
 
 function Sec({ k, id, n, t, children }: { k: string; id: string; n: number; t: string; children: ReactNode }) {
   return (
-    <details className="csec" id={`sec-${k}-${id}`}>
+    <details className="csec" id={`sec-${k}-${id}`} onToggle={e => { if ((e.currentTarget as HTMLDetailsElement).open) try { localStorage.setItem("odoo20-sec", JSON.stringify({ k, id })) } catch { /* ignore */ } }}>
       <summary><h2 className="sh"><i>{n}</i>{t}</h2><span className="chev" aria-hidden="true">▾</span></summary>
       <div className="cbody">{children}</div>
     </details>)

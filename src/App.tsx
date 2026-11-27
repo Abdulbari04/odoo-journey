@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import raw from './data.json'
 import type { Data } from './types'
 import { Bg } from './Bg'
@@ -9,17 +9,19 @@ import { TipToast } from './Tips'
 import { LEVELS, levelIdx } from './levels'
 import { Search } from './Search'
 import * as track from './track'
-import { Admin } from './Admin'
+const Certificate = lazy(() => import('./Certificate').then(m => ({ default: m.Certificate })))
+const Practice = lazy(() => import('./Practice').then(m => ({ default: m.Practice })))
+const Admin = lazy(() => import('./Admin').then(m => ({ default: m.Admin })))
 import { Home } from './Home'
 import { CommunityPage, readProf, ModuleComments } from './Community'
 import { Settings } from './Settings'
 import { useInbox, NotifPanel, Messages } from './Messages'
-import { calcPts, readPen, fmtN } from './points'
+import { calcPts, readPen, fmtN, invBonus } from './points'
 import { Landing } from './Landing'
 import { SkipExam, LevelExam, LockedCard, unlocked, type Passed } from './Levels'
 import * as store from './store'
 import { CloudSignup, SbAuth } from './Auth'
-import { ChapterView, GuideChapter, ORDER, N, type Sub } from './Chapter'
+import { ChapterView, GuideChapter, ORDER, N, loadGuides, type Sub } from './Chapter'
 
 const data = raw as unknown as Data
 type Step = { t: 'ch'; k: string; li: number } | { t: 'exam'; li: number }
@@ -57,11 +59,13 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const lockedK = (k: string) => !unlocked(levelIdx(k), passed)
   const [about, setAbout] = useState(false)
   const [bm, setBm] = useState(false)
-  useEffect(() => { if (!bm) return; const f = (e: Event) => { if (!(e.target as Element).closest?.('.bar-act, .bar-more')) setBm(false) }; addEventListener('pointerdown', f); return () => removeEventListener('pointerdown', f) }, [bm])
+  useEffect(() => { if (!bm) return; const f = (e: Event) => { if (!(e.target as Element).closest?.('.mn, .mn-t')) setBm(false) }; addEventListener('pointerdown', f); return () => removeEventListener('pointerdown', f) }, [bm])
   useEffect(() => {
     let last = 0, lastEl: EventTarget | null = null
     const f = (e: Event) => {
-      const t = e.target as Element | Document, y = t instanceof Document ? (document.scrollingElement?.scrollTop ?? 0) : (t as Element).scrollTop ?? 0
+      const t = e.target as Element | Document
+      if (!(t instanceof Document) && (t as Element).id !== 'home') return // لا نتفاعل مع سكرول القوائم الداخلية (الشريط الجانبي وغيره)
+      const y = t instanceof Document ? (document.scrollingElement?.scrollTop ?? 0) : (t as Element).scrollTop ?? 0
       if (t !== lastEl) { lastEl = t; last = y; return }
       const d = y - last
       if (Math.abs(d) < 8) return
@@ -73,12 +77,21 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const [penV, setPenV] = useState(0)
   useEffect(() => { const h = () => setPenV(v => v + 1); addEventListener('odoo20-pen', h); return () => removeEventListener('odoo20-pen', h) }, [])
   const modsN = ORDER.filter(k => done[k]).length, lvlsN = Object.values(passed).filter(Boolean).length
-  const pts = useMemo(() => calcPts(modsN, passed, readPen()), [modsN, passed, penV]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [invN, setInvN] = useState(0)
+  useEffect(() => {
+    let off = false
+    const run = () => { const c = store.myCode(); void store.listPeople().then(l => { if (!off) setInvN(l.filter(x => x.inv === c && !x.me && x.mods >= 1).length) }).catch(() => undefined) }
+    run(); const id = setInterval(run, 120000)
+    return () => { off = true; clearInterval(id) }
+  }, [])
+  const pts = useMemo(() => calcPts(modsN, passed, readPen()) + invBonus(invN), [modsN, passed, penV, invN]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const t = setTimeout(() => { const p = readProf(user); void store.pushPerson({ ...p, pts, mods: modsN, lvls: lvlsN }) }, 1200)
     return () => clearTimeout(t)
   }, [pts, modsN, lvlsN, user])
   const [srch, setSrch] = useState(false)
+  const [certO, setCertO] = useState(false); const [prO, setPrO] = useState(false)
+  const grad = lvlsN >= LEVELS.length && modsN >= ORDER.length
   const [sett, setSett] = useState(false)
   const dn = store.get('odoo20-dname') || user.name
   const inbox = useInbox(dn)
@@ -96,7 +109,7 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   const go = (k: string) => { setSub(null); setPage(stepOf(k)); setView('course'); setMenu(false) }
   const goLevel = (i: number) => { setSub(null); setPage(stepOf(LEVELS[i].ch[0])); setView('course') }
   const goExam = (li: number) => { setSub(null); setPage(STEPS.findIndex(x => x.t === 'exam' && x.li === li)); setView('course') }
-  const startJourney = () => { setView('course'); setStarted(true); save('odoo20-started', '1'); if (!started) setPage(0) }
+  const startJourney = () => { setView('course'); setStarted(true); save('odoo20-started', '1'); if (!started) setPage(0); else { try { const r = JSON.parse(load('odoo20-sec') || 'null'); if (r?.k && ORDER.includes(r.k)) { go(r.k); setTimeout(() => { const e = document.getElementById(`sec-${r.k}-${r.id}`) as HTMLDetailsElement | null; if (e) { e.open = true; e.scrollIntoView({ block: 'start' }) } }, 400) } } catch { /* ignore */ } } }
   const finish = (k: string) => { setDone(d => { const n = { ...d, [k]: true }; save('odoo20-done', JSON.stringify(n)); return n }); setSub(null); setPage(p => Math.min(p + 1, STEPS.length - 1)) }
   const passAll = (ids: number[]) => setPassed(p => { const n = { ...p }; ids.forEach(i => { n[i] = true }); save('odoo20-levels', JSON.stringify(n)); return n })
   const passLevel = (id: number) => setPassed(p => { const n = { ...p, [id]: true }; save('odoo20-levels', JSON.stringify(n)); return n })
@@ -110,8 +123,11 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
   }, [view, passed, page])
   const toggleDone = (k: string) => lockedK(k) || setDone(d => { const n = { ...d, [k]: !d[k] }; save('odoo20-done', JSON.stringify(n)); return n })
 
-  const course = view === 'course'
+  const [gReady, setGReady] = useState(false)
+  useEffect(() => { let off = false; void loadGuides().then(() => { if (!off) setGReady(true) }); return () => { off = true } }, [])
+  const course = view === 'course' && gReady
   const docked = desktop && course
+  useEffect(() => { const on = menu && !docked; document.documentElement.classList.toggle('sb-lock', on); return () => document.documentElement.classList.remove('sb-lock') }, [menu, docked])
   useEffect(() => { document.body.classList.toggle('docked', docked); return () => document.body.classList.remove('docked') }, [docked])
   const outFn = () => { if (store.getBackend() === 'claude') { setView('intro'); setMenu(false) } else onOut() }
   const tip = <TipToast k={course && step.t === 'ch' ? active : null} name={k => N[k]} />
@@ -122,6 +138,8 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
     {hello && <Welcome2 user={user} onClose={() => setHello(false)} />}
     {syncErr && <div className="syncerr" role="alert">⚠ مش قادر يحفظ على قاعدة البيانات دلوقتي، تقدّمك الأخير ممكن ما يتحفظش. <button onClick={() => setSyncErr('')}>×</button></div>}
     {tip}
+    {certO && <Suspense fallback={null}><Certificate name={store.get('odoo20-dname') || user.name} pts={pts} ok={grad} done={modsN} passedN={lvlsN} onClose={() => setCertO(false)} /></Suspense>}
+    {prO && <Suspense fallback={null}><Practice onClose={() => setPrO(false)} /></Suspense>}
     <Search open={srch} onClose={() => setSrch(false)} data={data} passed={passed} onPassAll={passAll} go={go} goSub={goSub} />
     {sett && <Settings base={user} pts={pts} mods={modsN} lvls={lvlsN} theme={theme} onTheme={setTheme} onClose={() => setSett(false)} />}
     {bell && <NotifPanel notifs={inbox.notifs} unread={inbox.unread} onClose={() => setBell(false)} onMarkAll={inbox.markAll} onOpen={n => { setBell(false); if (n.kind === 'msg' && n.peer) setMsgO(n.peer); else if (n.mod && ORDER.includes(n.mod)) go(n.mod); else setComm(true) }} />}
@@ -132,16 +150,21 @@ function Main({ user, fresh, onOut }: { user: User; fresh: boolean; onOut: () =>
       {course && <button className="menub" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-label="قايمة الفصول" title="قايمة الفصول">☰</button>}
       <button className="brand brandb" onClick={() => { setComm(false); setMenu(false); setView('intro'); scrollTo({ top: 0 }) }} title="صفحة البداية">خريطة أودو 20</button>
       <span className="prog" aria-live="polite">{ORDER.filter(k => done[k]).length}/{ORDER.length}</span>
-      <button className="bar-more" onClick={() => setBm(v => !v)} aria-expanded={bm} aria-label="القائمة" title="القائمة">{bm ? '✕' : '⋯'}</button>
-      <div className={'bar-act' + (bm ? ' open' : '')} onClick={() => setBm(false)}>
-      <button className="modeb nbtn" onClick={() => setMsgO('list')} aria-label="الرسائل" title="الرسائل">✉{inbox.unreadMsgs > 0 && <i className="bdg">{inbox.unreadMsgs}</i>}</button>
-      <button className="modeb nbtn" onClick={() => setBell(true)} aria-label="الإشعارات" title="الإشعارات">🔔{inbox.unread > 0 && <i className="bdg">{inbox.unread}</i>}</button>
-      <button className="modeb commb" onClick={() => setComm(true)} aria-label="المجتمع" title="المجتمع">👥 <span>المجتمع</span></button>
-      <button className="modeb srchb" onClick={() => setSrch(true)} aria-label="بحث" title="بحث">🔍</button>
-      <button className="modeb" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀' : '☾'}</button>
+      <div className="tq">
+        <button className="nbtn" onClick={() => setMsgO('list')} aria-label="الرسائل" title="الرسائل">✉{inbox.unreadMsgs > 0 && <i className="bdg">{inbox.unreadMsgs}</i>}</button>
+        <button className="nbtn" onClick={() => setBell(true)} aria-label="الإشعارات" title="الإشعارات">🔔{inbox.unread > 0 && <i className="bdg">{inbox.unread}</i>}</button>
+        <button onClick={() => setComm(true)} aria-label="المجتمع" title="المجتمع">👥 <span>المجتمع</span></button>
+        <button className="mn-t" onClick={() => setBm(v => !v)} aria-expanded={bm} aria-label="المزيد" title="المزيد">{bm ? '✕' : '☰'}</button>
+      </div>
+      <div className={'mn' + (bm ? ' open' : '')} onClick={() => setBm(false)}>
+        <button onClick={() => setSrch(true)}>🔍 بحث</button>
+        <button onClick={() => setSett(true)}>⚙ الإعدادات</button>
+        <button onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}>{theme === 'dark' ? '☀ الوضع الفاتح' : '☾ الوضع الداكن'}</button>
+        <button onClick={outFn}>⎋ تسجيل الخروج</button>
       </div>
     </div>
-    {!course && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} onMsg={() => setMsgO('list')} onBell={() => setBell(true)} nMsg={inbox.unreadMsgs} nBell={inbox.unread} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} onAbout={() => setAbout(true)} />}
+    {view === 'course' && !gReady && <div className="ld-wait" role="status">جاري تحميل الدروس…</div>}
+    {view !== 'course' && <Home name={user.name} passed={passed} done={done} started={started} onStart={startJourney} onModule={go} onSearch={() => setSrch(true)} onComm={() => setComm(true)} onSettings={() => setSett(true)} onMsg={() => setMsgO('list')} onBell={() => setBell(true)} nMsg={inbox.unreadMsgs} nBell={inbox.unread} pts={pts} onTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} theme={theme} onOut={outFn} onAbout={() => setAbout(true)} onCert={() => setCertO(true)} onPractice={() => setPrO(true)} grad={grad} />}
     {course && <div className="layout focus">
       <main className="chaps">
         {(() => {
@@ -196,7 +219,7 @@ export default function App() {
     })()
     return () => { off = true }
   }, [])
-  if (adm) return <><Bg /><Admin onClose={() => { history.replaceState(null, '', location.pathname + location.search); setAdm(false) }} /></>
+  if (adm) return <><Bg /><Suspense fallback={<div className="ld-wait">جاري التحميل…</div>}><Admin onClose={() => { history.replaceState(null, '', location.pathname + location.search); setAdm(false) }} /></Suspense></>
   if (phase === 'boot') return <><Bg /><div className="auth"><p className="auth-note">بنفتح حسابك…</p></div></>
   if (phase === 'signup') return <><Bg /><CloudSignup onDone={x => { setFresh(true); setU(x); setPhase('in') }} /><a className="adminlnk" href="#admin">لوحة الأدمن</a></>
   if (phase === 'sbauth' && land) return <><Bg /><Landing theme={theme0} onTheme={toggleTheme} onGo={m => { setAuthMode(m); setLand(false) }} /></>

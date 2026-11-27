@@ -91,6 +91,7 @@ export function Messages({ myName, msgs, peer0, onClose, markPeer, refresh }: { 
         <aside className="ms-l">
           <header><h2>✉️ الرسائل</h2><button className="sb-x" onClick={onClose} aria-label="إغلاق">×</button></header>
           {!can && <p className="ms-note">الرسائل المباشرة بتشتغل لما الموقع يكون متصل بقاعدة مشتركة (Supabase أو صفحة Claude).</p>}
+          {can && store.getBackend() === 'claude' && <p className="ms-note ms-warn">🔓 على صفحة Claude الرسائل مش سرية بالكامل. لا تكتب فيها بيانات حساسة. على نسخة Supabase الرسائل خاصة بين المرسل والمستقبل فقط.</p>}
           <input className="ms-s" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث عن عضو لتراسله…" aria-label="بحث عن عضو" />
           {q && <ul className="ms-c">{cand.map(p => <li key={p.id}><button onClick={() => { setPeer({ id: p.id, name: p.name }); setQ('') }}><Av p={p} name={p.name} s={34} /><span className="ms-n"><b>{p.name}</b><small>{p.job || 'عضو'}</small></span></button></li>)}{!cand.length && <li className="ms-e">لا يوجد عضو بهذا الاسم.</li>}</ul>}
           {!q && <ul className="ms-c">{convs.map(c => (

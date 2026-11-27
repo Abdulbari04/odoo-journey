@@ -24,3 +24,7 @@ export function calcPts(mods: number, passed: Record<number, boolean>, pen: Pen)
   return Math.max(0, Math.round(mods * MOD_PTS + lv - cut))
 }
 export const rankOf = (p: number) => (p >= 25000 ? 'مستشار' : p >= 15000 ? 'محلّل' : p >= 7000 ? 'ممارس' : p >= 2000 ? 'متعلّم' : 'مبتدئ')
+
+// مكافأة الدعوة: +500 نقطة عن كل صديق دعوته وأنهى موديولًا واحدًا على الأقل، بحد أقصى 10 أصدقاء
+export const INV_PTS = 500, INV_MAX = 10
+export const invBonus = (n: number) => Math.min(Math.max(n, 0), INV_MAX) * INV_PTS

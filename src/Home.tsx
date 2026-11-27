@@ -1,5 +1,5 @@
 import { LEVELS } from './levels'
-import { fmtN, MAX_PTS } from './points'
+import { fmtN } from './points'
 import { listPeople } from './store'
 import { N, COL, ORDER } from './Chapter'
 import { unlocked, type Passed } from './Levels'
@@ -26,7 +26,7 @@ function CountUp({ to }: { to: number }) {
 
 function Stats({ me }: { me: boolean }) {
   const [n, setN] = useState<{ u: number; g: number } | null>(null)
-  useEffect(() => { let off = false; void listPeople().then(l => { if (!off) setN({ u: Math.max(l.length, me ? 1 : 0), g: l.filter(x => x.pts >= MAX_PTS || x.lvls >= LEVELS.length).length }) }).catch(() => { if (!off) setN({ u: me ? 1 : 0, g: 0 }) }); return () => { off = true } }, [me])
+  useEffect(() => { let off = false; void listPeople().then(l => { if (!off) setN({ u: Math.max(l.length, me ? 1 : 0), g: l.filter(x => x.lvls >= LEVELS.length).length }) }).catch(() => { if (!off) setN({ u: me ? 1 : 0, g: 0 }) }); return () => { off = true } }, [me])
   const items: [string, number, string][] = [['🎓', n?.g ?? 0, 'طالب حصل على الكورس'], ['👥', n?.u ?? 0, 'مستخدم للموقع'], ['📦', ORDER.length, 'موديول']]
   return (
     <div className="hm2-st" aria-label="إحصائيات">
@@ -46,26 +46,28 @@ const LV_ICON: ReactNode[] = [
 ]
 
 // الصفحة الرئيسية: كل الموديولات في كروت، وجنب كل واحد حالته (مكتمل / مفتوح / مغلق + اختبار دخول)
-export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, onSettings, onMsg, onBell, nMsg, nBell, pts, onTheme, theme, onOut, onAbout }: {
+export function Home({ name, passed, done, started, onStart, onModule, onSearch, onComm, onSettings, onMsg, onBell, nMsg, nBell, pts, onTheme, theme, onOut, onAbout, onCert, onPractice, grad }: {
   name: string; passed: Passed; done: Record<string, boolean>; started: boolean; onStart: () => void; onModule: (k: string) => void
-  onSearch: () => void; onComm: () => void; onSettings: () => void; onMsg: () => void; onBell: () => void; nMsg: number; nBell: number; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void; onAbout: () => void
+  onSearch: () => void; onComm: () => void; onSettings: () => void; onMsg: () => void; onBell: () => void; nMsg: number; nBell: number; pts: number; onTheme: () => void; theme: 'light' | 'dark'; onOut: () => void; onAbout: () => void; onCert: () => void; onPractice: () => void; grad: boolean
 }) {
   const [am, setAm] = useState(false)
-  useEffect(() => { if (!am) return; const f = (e: Event) => { if (!(e.target as Element).closest?.('.ent-act, .hm-more')) setAm(false) }; addEventListener('pointerdown', f); return () => removeEventListener('pointerdown', f) }, [am])
+  useEffect(() => { if (!am) return; const f = (e: Event) => { if (!(e.target as Element).closest?.('.mn, .mn-t')) setAm(false) }; addEventListener('pointerdown', f); return () => removeEventListener('pointerdown', f) }, [am])
   const doneN = ORDER.filter(k => done[k]).length, passN = Object.values(passed).filter(Boolean).length
   return (
     <div id="home" role="region" aria-label="كل الموديولات">
       <div className="ent-top hm-top">
         <button className="ent-logo logo-btn" onClick={() => document.getElementById('home')?.scrollTo({ top: 0, behavior: 'smooth' })} title="صفحة البداية" aria-label="صفحة البداية"><b>O</b><span>خريطة أودو 20</span></button>
-        <button className="hm-more" onClick={() => setAm(v => !v)} aria-expanded={am} aria-label="القائمة" title="القائمة">{am ? '✕' : '☰'}</button>
-        <div className={'ent-act' + (am ? ' open' : '')} onClick={() => setAm(false)}>
+        <div className="tq">
           <button onClick={onMsg} aria-label="الرسائل" title="الرسائل" className="nb ico">✉{nMsg > 0 && <i className="bdg">{nMsg}</i>}</button>
           <button onClick={onBell} aria-label="الإشعارات" title="الإشعارات" className="nb ico">🔔{nBell > 0 && <i className="bdg">{nBell}</i>}</button>
-          <button onClick={onComm}>👥 المجتمع</button>
-          <button className="ico" onClick={onSearch} aria-label="بحث">🔍</button>
-          <button className="ico" onClick={onSettings} aria-label="الإعدادات" title="الإعدادات">⚙</button>
-          <button onClick={onTheme} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}>{theme === 'dark' ? '☀ فاتح' : '☾ داكن'}</button>
-          <button onClick={onOut}>خروج</button>
+          <button onClick={onComm} aria-label="المجتمع" title="المجتمع">👥 <span>المجتمع</span></button>
+          <button className="mn-t" onClick={() => setAm(v => !v)} aria-expanded={am} aria-label="المزيد" title="المزيد">{am ? '✕' : '☰'}</button>
+        </div>
+        <div className={'mn' + (am ? ' open' : '')} onClick={() => setAm(false)}>
+          <button onClick={onSearch}>🔍 بحث</button>
+          <button onClick={onSettings}>⚙ الإعدادات</button>
+          <button onClick={onTheme}>{theme === 'dark' ? '☀ الوضع الفاتح' : '☾ الوضع الداكن'}</button>
+          <button onClick={onOut}>⎋ تسجيل الخروج</button>
         </div>
       </div>
       <main className="hm2">
@@ -92,6 +94,10 @@ export function Home({ name, passed, done, started, onStart, onModule, onSearch,
             })}
           </div>
           <Stats me />
+          <div className="hm2-tools">
+            <button className={'hm2-tool' + (grad ? ' on' : '')} onClick={onCert}><i aria-hidden="true">{grad ? '🏅' : '🔒'}</i><b>شهادة التخرج</b><span>{grad ? 'جاهزة، احفظها كصورة' : 'بتتفتح بعد المستويات السبعة'}</span></button>
+            <button className="hm2-tool" onClick={onPractice}><i aria-hidden="true">🎯</i><b>تدريب عشوائي</b><span>أسئلة للمراجعة من غير نقاط</span></button>
+          </div>
         </section>
       </main>
       <footer className="hm2-ft"><p><button className="ab-link" onClick={onAbout}>ℹ️ عن الموقع</button> · تم الصنع بواسطة <b>Muhammed Abdul Bari</b> · النسخة <bdi dir="ltr">v{VERSION}</bdi> · © {new Date().getFullYear()} · <a href="#admin">لوحة الأدمن</a></p></footer>

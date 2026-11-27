@@ -57,7 +57,9 @@ export function Admin({ onClose }: { onClose: () => void }) {
   const [em, setEm] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [src, setSrc] = useState<'claude' | 'sb' | 'local'>('local')
-  const [tab, setTab] = useState<'ov' | 'rep' | 'users' | 'vid'>('ov')
+  const [people, setPeople] = useState<store.Person[]>([])
+  useEffect(() => { if (mode === 'ok') void store.listPeople().then(setPeople).catch(() => {}) }, [mode])
+  const [tab, setTab] = useState<'ov' | 'rep' | 'users' | 'vid' | 'prog'>('ov')
 
   const route = async () => {
     const c = await store.adminClaude()
@@ -122,7 +124,7 @@ export function Admin({ onClose }: { onClose: () => void }) {
         <span className="adm-src">{src === 'claude' ? 'قاعدة Claude' : src === 'sb' ? 'Supabase' : 'الجهاز ده فقط'}</span>
         <button onClick={refresh} disabled={busy}>تحديث</button><button onClick={out}>خروج</button></header>
       <nav className="adm-tabs" role="tablist" aria-label="أقسام لوحة الأدمن">
-        {([['ov', '📊 نظرة عامة'], ['rep', '📈 تقارير الاستخدام'], ['users', `👥 المستخدمين (${users.length})`], ['vid', '🎬 فيديوهات الموديولات']] as const).map(([id, t]) =>
+        {([['ov', '📊 نظرة عامة'], ['rep', '📈 تقارير الاستخدام'], ['users', `👥 المستخدمين (${users.length})`], ['prog', '🎓 التقدّم'], ['vid', '🎬 فيديوهات الموديولات']] as const).map(([id, t]) =>
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{t}</button>)}
       </nav>
       {tab === 'ov' && <>
@@ -151,7 +153,23 @@ export function Admin({ onClose }: { onClose: () => void }) {
               <b>آخر بحث:</b> {(u.s.searches || []).slice(0, 10).join('، ') || '—'}</td></tr>}
           </Fragment>)}</tbody></table></div>
       </>}
+      {tab === 'prog' && <ProgTab people={people} />}
       {tab === 'vid' && <VideosAdmin />}
       <button className="adm-back" onClick={onClose}>رجوع للموقع</button>
     </div>)
+}
+
+// توزيع التقدّم: كام واحد وصل لكل مستوى، وأعلى المتقدمين (من بيانات الملفات الشخصية)
+function ProgTab({ people }: { people: store.Person[] }) {
+  const n = people.length || 1
+  const dist = Array.from({ length: 8 }, (_, i) => people.filter(p => p.lvls === i).length)
+  const avg = people.length ? (people.reduce((a, p) => a + p.mods, 0) / people.length).toFixed(1) : '0'
+  const top = [...people].sort((a, b) => b.pts - a.pts).slice(0, 10)
+  return <>
+    <div className="adm-k"><div className="adm-c"><b>{people.length}</b><span>ملفات شخصية</span></div><div className="adm-c"><b>{avg}</b><span>متوسط الموديولات</span></div><div className="adm-c"><b>{dist[7]}</b><span>خلّصوا الـ7 مستويات</span></div></div>
+    <h3>توزيع المستخدمين حسب المستويات المجتازة</h3>
+    <div className="adm-bars">{dist.map((c, i) => <div key={i} className="adm-bar"><span>{i}</span><i style={{ width: `${(c / n) * 100}%` }} /><b>{c}</b></div>)}</div>
+    <h3>أعلى 10 بالنقاط</h3>
+    <ol>{top.map(p => <li key={p.id}>{p.name || 'مجهول'} · {p.pts} نقطة · {p.mods} موديول</li>)}</ol>
+  </>
 }

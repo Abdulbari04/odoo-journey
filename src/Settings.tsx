@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import * as store from './store'
+import { invBonus, INV_PTS, INV_MAX } from './points'
 import { ProfileTab, readProf, Av } from './Community'
 
 function Invite({ base, pts, mods, lvls }: { base: { name: string; job: string }; pts: number; mods: number; lvls: number }) {
@@ -7,7 +8,7 @@ function Invite({ base, pts, mods, lvls }: { base: { name: string; job: string }
   const [people, setPeople] = useState<store.Person[]>([]); const [inp, setInp] = useState(''); const [used, setUsed] = useState(store.get('odoo20-inv') || '')
   const [msg, setMsg] = useState(''); const [cp, setCp] = useState(false)
   useEffect(() => { void store.listPeople().then(setPeople) }, [])
-  const invited = people.filter(x => x.inv === code && !x.me)
+  const invited = people.filter(x => x.inv === code && !x.me), counted = invited.filter(x => x.mods >= 1).length
   const copy = async () => { try { await navigator.clipboard.writeText(code); setCp(true); setTimeout(() => setCp(false), 1500) } catch { setCp(false) } }
   const apply = async (e: React.FormEvent) => {
     e.preventDefault(); const c = inp.trim().toUpperCase(); if (!c) return
@@ -22,7 +23,7 @@ function Invite({ base, pts, mods, lvls }: { base: { name: string; job: string }
       <h3>🎟️ كود الدعوة</h3>
       <p className="st-d">شارك كودك مع زملائك، ومن يسجّله في إعداداته يُحسب لك في قائمة «من دعوتهم».</p>
       <div className="st-code"><bdi dir="ltr">{code}</bdi><button type="button" onClick={copy}>{cp ? 'تم النسخ ✓' : 'نسخ'}</button></div>
-      <p className="st-d">من دعوتهم: <b>{invited.length}</b>{invited.length > 0 && <span className="st-inv">{invited.map(x => <i key={x.id}><Av p={x} name={x.name} s={20} />{x.name}</i>)}</span>}</p>
+      <p className="st-d">من دعوتهم: <b>{invited.length}</b> · نقاط الدعوة: <b>{invBonus(counted)}</b> <small>(+{INV_PTS} عن كل صديق يكمّل موديولًا، حتى {INV_MAX})</small>{invited.length > 0 && <span className="st-inv">{invited.map(x => <i key={x.id}><Av p={x} name={x.name} s={20} />{x.name}</i>)}</span>}</p>
       {used
         ? <p className="st-d">دعاك: <b>{inviter?.name || <bdi dir="ltr">{used}</bdi>}</b></p>
         : <form className="st-f" onSubmit={apply}><input value={inp} onChange={e => setInp(e.target.value)} maxLength={8} placeholder="عندك كود دعوة من صديق؟" aria-label="كود الدعوة" dir="ltr" /><button className="ld-btn">تسجيل</button></form>}
